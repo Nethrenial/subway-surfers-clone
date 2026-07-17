@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#091323" />
+    <meta name="description" content="Neon Relay, an original three-lane endless runner." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%2340edff' d='M9 6h19l27 52H36z'/%3E%3Cpath fill='%23ff4f91' d='M9 6v52h27z'/%3E%3C/svg%3E" />
+    <title>Neon Relay</title>
+  </head>
+  <body>
+    <div id="presentation">
+      <div class="ambient-copy" aria-hidden="true">
+        <span class="eyebrow">Stormline courier trials</span>
+        <strong>NEON<br />RELAY</strong>
+        <span class="edition">Night circuit / 01</span>
+      </div>
+      <main id="app">
+        <canvas id="game-canvas" aria-label="Neon Relay endless runner"></canvas>
+        <section id="hud" aria-live="polite">
+          <div class="score-cluster">
+            <span>Run score</span>
+            <strong id="score-value">000000</strong>
+          </div>
+          <div class="distance-cluster">
+            <span id="distance-value">0 m</span>
+            <small id="speed-value">42 km/h</small>
+          </div>
+          <button id="pause-button" class="icon-button" type="button" aria-label="Pause game">II</button>
+        </section>
+        <div id="tutorial" class="tutorial">Swipe or use arrow keys</div>
+        <section id="pause-overlay" class="overlay" aria-hidden="true">
+          <div class="overlay-card">
+            <span class="eyebrow">Courier on hold</span>
+            <h1>Paused</h1>
+            <p>Scan ahead. Every pattern leaves a route.</p>
+            <button id="resume-button" class="primary-button" type="button">Resume run</button>
+          </div>
+        </section>
+        <section id="game-over-overlay" class="overlay" aria-hidden="true">
+          <div class="overlay-card failure-card">
+            <span class="eyebrow">Signal interrupted</span>
+            <h1>Run over</h1>
+            <div class="summary-row">
+              <span>Score</span>
+              <strong id="final-score-value">0</strong>
+            </div>
+            <div class="summary-row">
+              <span>Distance</span>
+              <strong id="final-distance-value">0 m</strong>
+            </div>
+            <button id="restart-button" class="primary-button" type="button">Run again</button>
+            <small>Press Enter or Space</small>
+          </div>
+        </section>
+        <div id="impact-flash" aria-hidden="true"></div>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

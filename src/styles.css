@@ -1,0 +1,308 @@
+:root {
+  color: #f6fbff;
+  background: #07101d;
+  font-family:
+    Avenir Next,
+    Avenir,
+    "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: geometricPrecision;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#presentation {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  min-width: 320px;
+  overscroll-behavior: none;
+}
+
+#presentation {
+  position: relative;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(115deg, rgba(4, 9, 18, 0.7), rgba(4, 12, 24, 0.2)),
+    repeating-linear-gradient(120deg, transparent 0 58px, rgba(64, 237, 255, 0.035) 59px 60px),
+    radial-gradient(circle at 22% 28%, rgba(247, 63, 139, 0.2), transparent 24rem),
+    radial-gradient(circle at 78% 68%, rgba(59, 224, 255, 0.15), transparent 28rem),
+    #07101d;
+}
+
+#app {
+  position: relative;
+  width: min(100vw, calc(100vh * 0.5625));
+  height: min(100vh, calc(100vw * 1.7778));
+  overflow: hidden;
+  isolation: isolate;
+  background: #0a1425;
+  box-shadow: 0 0 0 1px rgba(143, 239, 255, 0.16), 0 24px 80px rgba(0, 0, 0, 0.58);
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  touch-action: none;
+}
+
+#hud {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  left: max(14px, env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+  color: #f6f1df;
+  text-transform: uppercase;
+}
+
+.score-cluster {
+  display: grid;
+  padding-left: 10px;
+  border-left: 3px solid #40edff;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.55));
+}
+
+.score-cluster span,
+.distance-cluster small {
+  color: rgba(225, 243, 255, 0.68);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.score-cluster strong {
+  color: #fff;
+  font-size: clamp(1.12rem, 4.8vw, 1.45rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+}
+
+.distance-cluster {
+  display: grid;
+  min-width: 86px;
+  text-align: right;
+}
+
+.distance-cluster span {
+  color: #ffda63;
+  font-size: 0.88rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.icon-button {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(167, 239, 255, 0.35);
+  border-radius: 50%;
+  color: #eafcff;
+  background: rgba(4, 16, 30, 0.62);
+  font-size: 0.72rem;
+  font-weight: 900;
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+}
+
+.tutorial {
+  position: absolute;
+  bottom: max(28px, env(safe-area-inset-bottom));
+  left: 50%;
+  width: max-content;
+  max-width: 84%;
+  padding: 8px 14px;
+  border: 1px solid rgba(94, 224, 255, 0.26);
+  border-radius: 999px;
+  color: rgba(235, 251, 255, 0.82);
+  background: rgba(2, 11, 24, 0.62);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transform: translateX(-50%);
+  transition: opacity 400ms ease;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+.tutorial.is-hidden {
+  opacity: 0;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  padding: 26px;
+  visibility: hidden;
+  opacity: 0;
+  background: rgba(3, 9, 20, 0.62);
+  backdrop-filter: blur(8px) saturate(0.7);
+  transition: opacity 160ms ease, visibility 160ms;
+}
+
+.overlay.is-visible {
+  visibility: visible;
+  opacity: 1;
+}
+
+.overlay-card {
+  width: min(100%, 320px);
+  padding: 28px;
+  border: 1px solid rgba(106, 230, 255, 0.38);
+  border-radius: 4px 24px 4px 24px;
+  background: linear-gradient(145deg, rgba(13, 31, 53, 0.96), rgba(6, 16, 31, 0.96));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48), inset 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.overlay-card h1 {
+  margin: 4px 0 8px;
+  font-size: 2.35rem;
+  font-weight: 900;
+  letter-spacing: -0.06em;
+  text-transform: uppercase;
+}
+
+.overlay-card p {
+  margin: 0 0 22px;
+  color: rgba(226, 242, 255, 0.7);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.eyebrow {
+  color: #40edff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.primary-button {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 18px;
+  border: 0;
+  border-radius: 2px 12px 2px 12px;
+  color: #07101d;
+  background: linear-gradient(90deg, #40edff, #8ff8ff);
+  box-shadow: 0 8px 26px rgba(64, 237, 255, 0.22);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.failure-card {
+  border-color: rgba(255, 70, 135, 0.48);
+}
+
+.failure-card .eyebrow {
+  color: #ff5c9b;
+}
+
+.failure-card .primary-button {
+  background: linear-gradient(90deg, #ff4f91, #ffcf5c);
+  box-shadow: 0 8px 26px rgba(255, 78, 144, 0.2);
+}
+
+.failure-card > small {
+  display: block;
+  margin-top: 10px;
+  color: rgba(225, 243, 255, 0.45);
+  font-size: 0.62rem;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(174, 230, 255, 0.12);
+  color: rgba(225, 243, 255, 0.64);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.summary-row strong {
+  color: #fff;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+
+#impact-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: #ff4f91;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ambient-copy {
+  position: absolute;
+  left: clamp(28px, 6vw, 100px);
+  top: 50%;
+  display: grid;
+  gap: 12px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.ambient-copy strong {
+  color: rgba(228, 248, 255, 0.88);
+  font-size: clamp(3rem, 7vw, 7rem);
+  line-height: 0.77;
+  letter-spacing: -0.09em;
+}
+
+.edition {
+  color: rgba(196, 228, 240, 0.36);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+  .ambient-copy {
+    display: none;
+  }
+}
+
+@media (max-aspect-ratio: 9 / 16) {
+  #app {
+    width: 100vw;
+    height: 100vh;
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .tutorial {
+    transition: none;
+  }
+}

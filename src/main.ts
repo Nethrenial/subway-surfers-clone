@@ -8,6 +8,13 @@ if (!canvas) {
 }
 
 const game = new Game(canvas);
+const loadingProgress = document.querySelector<HTMLElement>('#loading-progress');
+const loadingScreen = document.querySelector<HTMLElement>('#loading-screen');
+
+await game.initialize((progress) => {
+  if (loadingProgress) loadingProgress.style.setProperty('--load-progress', `${Math.round(progress * 100)}%`);
+});
+loadingScreen?.classList.add('is-complete');
 game.start();
 
 if (import.meta.hot) {

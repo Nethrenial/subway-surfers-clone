@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { InputFrame } from '../core/InputController';
+import { CharacterAnimationController } from '../systems/CharacterAnimationController';
 
 export type PlayerState = 'running' | 'jumping' | 'rolling' | 'crashed';
 
@@ -42,11 +43,29 @@ export class Player {
   private rollRemaining = 0;
   private queuedJump = false;
   private strideTime = 0;
+  private characterAnimation: CharacterAnimationController | null = null;
 
   constructor() {
     this.position.set(0, 0, 4.1);
     this.group.add(this.bodyRoot);
     this.buildRunner();
+  }
+
+  setVisual(model: THREE.Object3D): void {
+    this.bodyRoot.clear();
+    model.position.set(0, 0, 0);
+    model.rotation.y = Math.PI;
+    model.scale.setScalar(1);
+    model.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(model);
+    const size = bounds.getSize(new THREE.Vector3());
+    const scale = 1.98 / Math.max(0.001, size.y);
+    model.scale.setScalar(scale);
+    model.updateMatrixWorld(true);
+    const scaledBounds = new THREE.Box3().setFromObject(model);
+    model.position.y -= scaledBounds.min.y;
+    this.bodyRoot.add(model);
+    this.characterAnimation = new CharacterAnimationController(model);
   }
 
   update(delta: number, input: Readonly<InputFrame>): void {
@@ -97,6 +116,7 @@ export class Player {
       this.bodyRoot.rotation.x = THREE.MathUtils.lerp(this.bodyRoot.rotation.x, 0, 1 - Math.exp(-14 * delta));
       this.bodyRoot.position.y = Math.sin(this.strideTime) * 0.035;
     }
+    this.characterAnimation?.update(delta, this.state, 0.7);
   }
 
   reset(): void {

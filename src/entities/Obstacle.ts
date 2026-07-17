@@ -23,7 +23,7 @@ export class Obstacle {
   private motionAmplitude = 0;
   private motionPhase = 0;
 
-  private readonly profiles: Record<ObstacleType, THREE.Group>;
+  private readonly profiles: Record<ObstacleType, THREE.Object3D>;
 
   constructor(resources: ObstacleResources) {
     this.profiles = {
@@ -38,6 +38,14 @@ export class Obstacle {
       this.group.add(profile);
     }
     this.group.visible = false;
+  }
+
+  setProfileModel(type: ObstacleType, model: THREE.Object3D): void {
+    const current = this.profiles[type];
+    model.visible = current.visible;
+    this.group.remove(current);
+    this.profiles[type] = model;
+    this.group.add(model);
   }
 
   configure(type: ObstacleType, lane: number, localZ: number, motionAmplitude = 0): void {

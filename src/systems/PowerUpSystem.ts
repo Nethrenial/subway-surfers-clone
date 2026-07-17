@@ -25,7 +25,8 @@ class PowerUpPickup implements Poolable {
   type: PowerUpType = 'magnet';
   previousZ = 0;
 
-  private readonly profiles = new Map<PowerUpType, THREE.Mesh>();
+  private readonly profiles = new Map<PowerUpType, THREE.Object3D>();
+  private readonly ownedMaterials: THREE.Material[] = [];
 
   constructor(geometry: THREE.BufferGeometry) {
     for (const type of TYPES) {
@@ -36,6 +37,7 @@ class PowerUpPickup implements Poolable {
         roughness: 0.22,
         metalness: 0.5,
       });
+      this.ownedMaterials.push(material);
       const mesh = new THREE.Mesh(geometry, material);
       mesh.visible = false;
       mesh.castShadow = true;
@@ -59,8 +61,18 @@ class PowerUpPickup implements Poolable {
     this.group.visible = false;
   }
 
+  setTemplate(type: PowerUpType, template: THREE.Object3D): void {
+    const current = this.profiles.get(type);
+    if (!current) return;
+    const replacement = template.clone(true);
+    replacement.visible = current.visible;
+    this.group.remove(current);
+    this.profiles.set(type, replacement);
+    this.group.add(replacement);
+  }
+
   dispose(): void {
-    for (const profile of this.profiles.values()) (profile.material as THREE.Material).dispose();
+    for (const material of this.ownedMaterials) material.dispose();
   }
 }
 
@@ -141,6 +153,12 @@ export class PowerUpSystem {
     for (const type of TYPES) this.remaining[type] = 0;
     this.spawnCursorZ = -34;
     this.nextType = 0;
+  }
+
+  setTemplates(templates: Record<PowerUpType, THREE.Object3D>): void {
+    for (const pickup of this.pool.items) {
+      for (const type of TYPES) pickup.setTemplate(type, templates[type]);
+    }
   }
 
   spawnForTest(type: PowerUpType, player: Player): void {

@@ -102,6 +102,14 @@ Mobile degradation order: disable post-processing, lower DPR, reduce shadow map/
 
 Courier Blender bounds before runtime normalization: `1.246 x 0.825 x 2.241 m`. Runtime scale will preserve the existing collision contract instead of using detailed meshes for collisions.
 
+Runtime integration checkpoint:
+
+- All eight GLBs load through `AssetManager` with fallback handling.
+- Static hero pieces are merged by material while ten named limb/pack/helmet parts remain animated.
+- Obstacles and world modules are merged by material; far obstacle visuals are culled without changing collision state.
+- Active desktop/mobile diagnostics: `116` calls, about `102k` triangles, `90` geometries, `4` textures.
+- Measured pixels: color entropy `4.82`, edge density about `0.20`, luminance contrast `186–189`, dominant-color share about `0.16`.
+
 ## Audio Matrix
 
 External generation is blocked, so Stage 3 will author a procedural Web Audio matrix:

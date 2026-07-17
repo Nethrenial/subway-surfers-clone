@@ -58,6 +58,86 @@ body {
   touch-action: none;
 }
 
+#loading-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  color: #edfaff;
+  background:
+    linear-gradient(160deg, rgba(16, 41, 72, 0.58), transparent 45%),
+    radial-gradient(circle at 50% 72%, rgba(239, 60, 103, 0.22), transparent 38%),
+    #061225;
+  transition: opacity 500ms ease, visibility 500ms;
+}
+
+#loading-screen::after {
+  position: absolute;
+  inset: 12px;
+  border: 1px solid rgba(82, 231, 255, 0.18);
+  content: "";
+  clip-path: polygon(0 0, 28% 0, 32% 5px, 68% 5px, 72% 0, 100% 0, 100% 100%, 72% 100%, 68% calc(100% - 5px), 32% calc(100% - 5px), 28% 100%, 0 100%);
+}
+
+#loading-screen.is-complete {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#loading-screen > strong {
+  font-size: clamp(2.3rem, 10vw, 3.5rem);
+  line-height: 0.9;
+  letter-spacing: -0.07em;
+}
+
+#loading-screen > small {
+  color: rgba(218, 240, 251, 0.52);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.loading-mark {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 38px;
+}
+
+.loading-mark i {
+  width: 8px;
+  border-radius: 2px;
+  background: #48edff;
+  box-shadow: 0 0 14px rgba(72, 237, 255, 0.55);
+  transform: skew(-24deg);
+}
+
+.loading-mark i:nth-child(1) { height: 20px; }
+.loading-mark i:nth-child(2) { height: 36px; background: #ff4d82; }
+.loading-mark i:nth-child(3) { height: 27px; }
+
+#loading-progress {
+  width: min(230px, 58vw);
+  height: 3px;
+  margin-top: 18px;
+  overflow: hidden;
+  background: rgba(198, 238, 255, 0.12);
+}
+
+#loading-progress i {
+  display: block;
+  width: var(--load-progress, 0%);
+  height: 100%;
+  background: linear-gradient(90deg, #42eaff, #ff4d82, #ffad33);
+  box-shadow: 0 0 12px rgba(72, 237, 255, 0.7);
+  transition: width 180ms ease;
+}
+
 #hud {
   position: absolute;
   top: max(16px, env(safe-area-inset-top));

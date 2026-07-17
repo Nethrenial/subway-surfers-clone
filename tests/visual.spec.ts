@@ -55,6 +55,8 @@ test('renders and completes the runner interaction loop', async ({ page }, testI
   await page.goto('/');
   await expect(page.locator('#game-canvas')).toBeVisible();
   await page.waitForFunction(() => (window.__THREE_GAME_DIAGNOSTICS__?.frame ?? 0) > 10);
+  await expect(page.locator('#loading-screen')).toHaveClass(/is-complete/);
+  await expect.poll(async () => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.assets.files ?? 0)).toBe(8);
 
   const sample = await sampleCanvas(page);
   expect(sample, JSON.stringify(sample)).toMatchObject({ ok: true });

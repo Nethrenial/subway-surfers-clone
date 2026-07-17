@@ -17,6 +17,7 @@ interface ThreeGameDiagnostics {
     state: 'running' | 'jumping' | 'rolling' | 'crashed';
   };
   entities: { obstacles: number; collectibles: number; segments: number };
+  assets: { files: number; meshes: number; triangles: number; materials: number };
   renderer: {
     calls: number;
     triangles: number;

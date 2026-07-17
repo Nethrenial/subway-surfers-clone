@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Obstacle, type ObstacleResources } from '../entities/Obstacle';
 import { createSegmentPattern, type HazardPlacement } from './PatternGenerator';
+
+export type ObstacleTemplates = Record<'barrier' | 'hurdle' | 'gate' | 'drone' | 'train', THREE.Object3D>;
 import type { SeededRandom } from '../utils/random';
 
 const SEGMENT_LENGTH = 12;
@@ -102,7 +104,11 @@ export class TrackManager {
     for (const segment of this.segments) {
       for (const obstacle of segment.obstacles) {
         obstacle.previousWorldZ = obstacle.worldZ();
-        if (obstacle.active) obstacle.updateMotion(elapsed);
+        if (obstacle.active) {
+          obstacle.updateMotion(elapsed);
+          const worldZ = obstacle.worldZ();
+          obstacle.group.visible = worldZ > -52 && worldZ < 16;
+        }
       }
       segment.group.position.z += speed * delta;
       if (segment.group.position.z > RECYCLE_Z) {
@@ -125,6 +131,14 @@ export class TrackManager {
       segment.configure(createSegmentPattern(this.generation, this.rng));
       this.generation += 1;
       for (const obstacle of segment.obstacles) obstacle.previousWorldZ = obstacle.worldZ();
+    }
+  }
+
+  setObstacleTemplates(templates: ObstacleTemplates): void {
+    for (const obstacle of this.obstacles) {
+      for (const type of Object.keys(templates) as (keyof ObstacleTemplates)[]) {
+        obstacle.setProfileModel(type, templates[type].clone(true));
+      }
     }
   }
 

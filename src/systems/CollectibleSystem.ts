@@ -19,7 +19,7 @@ export class CollectibleSystem {
   readonly pool = new ObjectPool(() => new Collectible(), 80);
   readonly result: CollectionResult = { count: 0, value: 0, x: 0, y: 0, z: 0 };
 
-  private readonly coinGeometry = new THREE.TorusGeometry(0.24, 0.085, 8, 16);
+  private coinGeometry: THREE.BufferGeometry = new THREE.TorusGeometry(0.24, 0.085, 8, 16);
   private readonly coinMaterial = new THREE.MeshStandardMaterial({
     color: '#ffd75e',
     emissive: '#9e5e00',
@@ -27,7 +27,7 @@ export class CollectibleSystem {
     roughness: 0.26,
     metalness: 0.62,
   });
-  private readonly rareGeometry = new THREE.OctahedronGeometry(0.35, 0);
+  private rareGeometry: THREE.BufferGeometry = new THREE.OctahedronGeometry(0.35, 0);
   private readonly rareMaterial = new THREE.MeshStandardMaterial({
     color: '#ff65d3',
     emissive: '#9d167b',
@@ -120,6 +120,15 @@ export class CollectibleSystem {
     this.spawnTrail(1, -3.5);
     this.coins.count = 0;
     this.rares.count = 0;
+  }
+
+  setGeometries(coin: THREE.BufferGeometry, rare: THREE.BufferGeometry): void {
+    this.coinGeometry.dispose();
+    this.rareGeometry.dispose();
+    this.coinGeometry = coin;
+    this.rareGeometry = rare;
+    this.coins.geometry = coin;
+    this.rares.geometry = rare;
   }
 
   dispose(): void {

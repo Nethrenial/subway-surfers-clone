@@ -79,9 +79,12 @@ Work is intentionally paused before this stage while Blender and Blender MCP are
 - [x] Original Blender courier source and game-ready GLB
 - [x] Authored barrier, hurdle, gate, drone, and train GLBs
 - [x] Authored reward, power-up, and modular world kits
-- [ ] Runtime GLB loading, normalization, animation, and fallback handling
-- [ ] District art direction integration and animated scenery
-- [ ] Character animation controller
+- [x] Runtime GLB loading, normalization, procedural limb animation, diagnostics, and fallback handling
+- [x] Shared runtime PBR material roles and material-based model merging
+- [x] Scrolling district modules with grounded side platforms and distance-culling
+- [x] Imported asset browser assertions and loading-screen transition
+- [ ] Final district lighting, render pipeline, animated scenery, and event VFX
+- [x] Character animation controller for run, jump, roll, and pack/helmet motion
 - [ ] Material library, particles, speed lines, and reward VFX
 - [ ] Production lighting, shadow tiers, fog, and render diagnostics
 - [ ] Generated or permissively licensed music and SFX

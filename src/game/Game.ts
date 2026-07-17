@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { AssetManager } from '../assets/AssetManager';
+import { MaterialLibrary } from '../assets/MaterialLibrary';
 import { InputController, type InputAction } from '../core/InputController';
 import { Loop } from '../core/Loop';
 import { createRenderer, resizeRenderer } from '../core/Renderer';
@@ -11,6 +14,7 @@ import { Hud } from '../systems/Hud';
 import { PowerUpSystem, type PowerUpType } from '../systems/PowerUpSystem';
 import { ScoreSystem } from '../systems/ScoreSystem';
 import { TrackManager } from '../systems/TrackManager';
+import { WorldArtDirector } from '../systems/WorldArtDirector';
 import { createSeededRandom } from '../utils/random';
 
 type GameState = 'running' | 'paused' | 'game-over';
@@ -28,12 +32,17 @@ export class Game {
   private readonly cameraRig = new CameraRig(this.camera);
   private readonly scoreSystem = new ScoreSystem();
   private readonly effects = new EffectsManager();
+  private readonly materials = new MaterialLibrary();
+  private readonly assets = new AssetManager(this.materials);
   private readonly track: TrackManager;
   private readonly collectibles: CollectibleSystem;
   private readonly powerUps: PowerUpSystem;
   private readonly hud: Hud;
   private readonly loop = new Loop((delta, elapsed) => this.update(delta, elapsed), () => this.render());
   private readonly worldRoot = new THREE.Group();
+  private worldArt: WorldArtDirector | null = null;
+  private fallbackCity: THREE.Group | null = null;
+  private environmentTexture: THREE.Texture | null = null;
   private seedValue = 7;
   private rng = createSeededRandom(this.seedValue);
   private state: GameState = 'running';
@@ -48,6 +57,11 @@ export class Game {
     this.renderer = createRenderer(canvas);
     this.renderer.setClearColor('#091426');
     this.renderer.toneMappingExposure = 1.1;
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.environmentTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environment = this.environmentTexture;
+    this.scene.environmentIntensity = 0.9;
+    pmrem.dispose();
     this.input = new InputController(canvas);
     this.hud = new Hud(
       () => this.pause(),
@@ -63,6 +77,48 @@ export class Game {
     this.publishDiagnostics();
   }
 
+  async initialize(onProgress: (progress: number) => void): Promise<void> {
+    try {
+      await this.assets.loadAll(onProgress);
+      this.player.setVisual(this.assets.cloneHero());
+      this.track.setObstacleTemplates({
+        barrier: this.assets.cloneMerged('barrier', 'BarrierRoot'),
+        hurdle: this.assets.cloneMerged('hurdle', 'HurdleRoot'),
+        gate: this.assets.cloneMerged('gate', 'GateRoot'),
+        drone: this.assets.cloneMerged('drone', 'DroneRoot'),
+        train: this.assets.cloneMerged('train', 'TrainRoot'),
+      });
+      this.collectibles.setGeometries(
+        this.assets.combinedGeometry('rewards', 'RelayTokenRoot'),
+        this.assets.combinedGeometry('rewards', 'RareShardRoot'),
+      );
+      this.powerUps.setTemplates({
+        magnet: this.assets.cloneMerged('rewards', 'PowerMagnetRoot'),
+        shield: this.assets.cloneMerged('rewards', 'PowerShieldRoot'),
+        multiplier: this.assets.cloneMerged('rewards', 'PowerMultiplierRoot'),
+        'jump-boost': this.assets.cloneMerged('rewards', 'PowerJumpRoot'),
+      });
+      this.worldArt = new WorldArtDirector({
+        arch: this.assets.cloneMerged('world', 'TransitArchRoot'),
+        pylon: this.assets.cloneMerged('world', 'RoutePylonRoot'),
+        lamp: this.assets.cloneMerged('world', 'StreetLampRoot'),
+        billboard: this.assets.cloneMerged('world', 'BillboardRoot'),
+        utility: this.assets.cloneMerged('world', 'UtilityClusterRoot'),
+        buildingA: this.assets.cloneMerged('world', 'BuildingARoot'),
+        buildingB: this.assets.cloneMerged('world', 'BuildingBRoot'),
+      });
+      if (this.fallbackCity) {
+        this.worldRoot.remove(this.fallbackCity);
+        this.disposeGroup(this.fallbackCity);
+        this.fallbackCity = null;
+      }
+      this.worldRoot.add(this.worldArt.group);
+      this.publishDiagnostics();
+    } catch (error) {
+      console.warn('Presentation assets failed to load; using procedural fallback.', error);
+    }
+  }
+
   start(): void {
     this.loop.start();
   }
@@ -74,6 +130,10 @@ export class Game {
     this.collectibles.dispose();
     this.powerUps.dispose();
     this.effects.dispose();
+    this.worldArt?.dispose();
+    this.assets.dispose();
+    this.materials.dispose();
+    this.environmentTexture?.dispose();
     this.player.dispose();
     this.renderer.dispose();
     window.__THREE_GAME_DIAGNOSTICS__ = undefined;
@@ -103,6 +163,7 @@ export class Game {
     this.player.jumpMultiplier = this.powerUps.jumpMultiplier;
     this.player.update(delta, input);
     this.track.update(delta, this.elapsed, this.speed);
+    this.worldArt?.update(delta, this.speed);
     const collectedPower = this.powerUps.update(delta, this.speed, this.player);
     if (collectedPower) {
       this.effects.burst(this.player.position.x, this.player.position.y + 1, this.player.position.z);
@@ -168,7 +229,8 @@ export class Game {
     this.scene.add(rim);
 
     this.worldRoot.add(this.track.group, this.collectibles.group, this.powerUps.group, this.effects.group);
-    this.worldRoot.add(this.createCityBackdrop());
+    this.fallbackCity = this.createCityBackdrop();
+    this.worldRoot.add(this.fallbackCity, this.createSky());
     this.scene.add(this.worldRoot);
     this.scene.add(this.player.group);
   }
@@ -226,6 +288,7 @@ export class Game {
     this.collectibles.reset(this.rng);
     this.powerUps.reset(this.rng);
     this.effects.reset();
+    this.worldArt?.reset();
     this.scoreSystem.reset();
     this.cameraRig.snap(0);
     this.hud.update(0, 0, this.speed, 0, 1, this.powerUps.remaining);
@@ -282,6 +345,7 @@ export class Game {
         collectibles: this.collectibles.pool.activeCount,
         segments: 10,
       },
+      assets: { ...this.assets.diagnostics },
       renderer: {
         calls: info.render.calls,
         triangles: info.render.triangles,
@@ -296,5 +360,32 @@ export class Game {
         dpr: Math.min(window.devicePixelRatio || 1, 1.75),
       },
     };
+  }
+
+  private createSky(): THREE.Mesh {
+    const geometry = new THREE.SphereGeometry(120, 24, 12);
+    const material = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      depthWrite: false,
+      uniforms: {
+        topColor: { value: new THREE.Color('#071b42') },
+        horizonColor: { value: new THREE.Color('#61324f') },
+        glowColor: { value: new THREE.Color('#ff8b63') },
+      },
+      vertexShader: `varying vec3 vDirection; void main() { vDirection = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `varying vec3 vDirection; uniform vec3 topColor; uniform vec3 horizonColor; uniform vec3 glowColor; void main() { float h = clamp(vDirection.y * 0.5 + 0.5, 0.0, 1.0); vec3 color = mix(horizonColor, topColor, pow(h, 0.7)); float glow = pow(max(0.0, dot(normalize(vDirection), normalize(vec3(-0.5, 0.12, -0.8)))), 10.0); gl_FragColor = vec4(color + glowColor * glow * 0.28, 1.0); }`,
+    });
+    const sky = new THREE.Mesh(geometry, material);
+    sky.frustumCulled = false;
+    return sky;
+  }
+
+  private disposeGroup(root: THREE.Object3D): void {
+    root.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return;
+      object.geometry.dispose();
+      if (Array.isArray(object.material)) object.material.forEach((material) => material.dispose());
+      else object.material.dispose();
+    });
   }
 }

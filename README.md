@@ -6,7 +6,7 @@ This project is inspired by the lane-based endless-runner genre. It does not use
 
 ## Current State
 
-Stages 1 and 2 are complete. The project is a playable runner with keyboard and swipe controls, deterministic fair track patterns, pooled coin and rare-pickup trails, five hazard profiles, four simultaneous power-up states, score and speed progression, shield recovery, collision, pause, game over, and immediate restart. Presentation, progression, generated assets, and full audio are later stages tracked in `IMPLEMENTATION_STATUS.md`.
+Stages 1 through 3 are complete. The playable runner now includes an articulated Blender-authored courier, animated hazard machinery and oncoming trains, a layered city kit, textured PBR materials, desktop bloom, mobile direct rendering, procedural adaptive audio, a full menu/settings/pause/failure flow, and deterministic desktop/mobile visual baselines. Persistent progression remains the next major stage in `IMPLEMENTATION_STATUS.md`.
 
 ## Run Locally
 
@@ -26,6 +26,7 @@ npm run build
 npm run preview
 npm run test:unit
 npm run verify:visual
+npx playwright test tests/visual-regression.spec.ts
 npm run inspect:canvas -- --url http://127.0.0.1:5188 --state active-play --seed 7
 ```
 
@@ -56,7 +57,7 @@ npm run inspect:canvas -- --url http://127.0.0.1:5188 --state active-play --seed
 
 **Readability promise:** every obstacle uses a distinct height and color profile, the camera always exposes the next lane decision, and every generated row retains at least one safe lane.
 
-**Current non-goals:** missions, unlocks, shop, imported hero assets, production audio, persistent progression, and final graphics.
+**Current non-goals:** missions, unlocks, shop, cloud services, and persistent progression.
 
 ## Track And Pacing
 
@@ -78,6 +79,8 @@ The code follows engine-like ownership without abstracting beyond current mechan
 | --- | --- |
 | `src/core/Loop.ts` | Single capped-delta requestAnimationFrame loop |
 | `src/core/Renderer.ts` | Renderer setup, DPR cap, and responsive canvas sizing |
+| `src/assets/AssetManager.ts` | GLB loading, articulated-part preservation, material batching, and asset diagnostics |
+| `src/assets/MaterialLibrary.ts` | Shared PBR roles and procedural panel texture |
 | `src/core/InputController.ts` | Keyboard and pointer gestures converted to one-frame intents |
 | `src/core/ObjectPool.ts` | Fixed-capacity reusable gameplay objects |
 | `src/game/Game.ts` | State transitions and explicit system update order |
@@ -90,6 +93,10 @@ The code follows engine-like ownership without abstracting beyond current mechan
 | `src/systems/PowerUpSystem.ts` | Pooled pickups and explicit duration/stack/consumption rules |
 | `src/systems/ScoreSystem.ts` | Distance, currency, reward, and multiplier calculations |
 | `src/systems/EffectsManager.ts` | Instanced collection and shield burst particles |
+| `src/systems/CharacterAnimationController.ts` | Hierarchical run, jump, roll, landing, lane-cut, crash, pack, and ribbon poses |
+| `src/systems/AudioManager.ts` | Browser-unlocked procedural music, ambience, movement, pickup, threat, and UI audio |
+| `src/systems/RenderPipeline.ts` | Measured desktop bloom and direct mobile rendering |
+| `src/systems/WorldArtDirector.ts` | Batched recycling of authored city modules and near-world props |
 | `src/systems/CollisionSystem.ts` | Allocation-free swept Z and AABB overlap checks |
 | `src/systems/CameraRig.ts` | Chase framing and trauma-based impact response |
 | `src/systems/Hud.ts` | HUD and pause/game-over presentation driven by game state |
@@ -104,7 +111,7 @@ Frequently reused track segments, obstacle profiles, collectibles, power-up pick
 
 ## Testing
 
-Vitest covers scoring, pooling, player transitions, power-up rules, swipe interpretation, and thousands of seeded procedural patterns. `tests/visual.spec.ts` runs against desktop Chromium and mobile WebKit emulation. It verifies:
+Vitest covers scoring, pooling, player transitions, animated train/drone motion, power-up rules, swipe interpretation, and thousands of seeded procedural patterns. `tests/visual.spec.ts` runs against desktop Chromium and mobile WebKit emulation. It verifies:
 
 - Nonblank, varied WebGL output and portrait framing
 - Objective progression through distance and score
@@ -121,18 +128,17 @@ Vitest covers scoring, pooling, player transitions, power-up rules, swipe interp
 
 The game exposes `window.__THREE_GAME_DIAGNOSTICS__` and deterministic `window.__THREE_GAME_TEST_HOOKS__` for browser QA, canvas inspection, and future bot playtests.
 
+`tests/visual-regression.spec.ts` protects 18 desktop/mobile states: menu, settings, active play, jump apex, roll tuck, hazard showcase, shield, pause, and game over. Current serial active-play measurements are 132 calls and 176,154 triangles on desktop, and 118 calls and 173,476 triangles on mobile, with no console or page errors.
+
 ## Assets And Licenses
 
-Stage 1 uses only procedural Three.js geometry and CSS presentation. See `ASSET_ATTRIBUTIONS.md`. Three.js and other package licenses are available in their npm packages.
+All runtime art is original project-owned work. Editable Blender source is in `art/blender/neon-relay-stage3.blend`; browser-ready GLBs are in `public/assets/models/`. See `ASSET_ATTRIBUTIONS.md`.
 
 ## Known Limitations
 
-- Visuals are a readable foundation, not the requested final premium bar.
-- No persistent economy, progression, missions, settings, unlocks, or saved data yet.
-- Audio is not integrated yet.
-- Track scenery is currently static while road segments recycle.
+- The Stage 3 fresh-eyes score is `23/30`, passing the premium gate but not the stricter showcase gate; broader environment variation and event VFX remain future polish.
+- No persistent economy, progression, missions, unlocks, or saved data yet.
 - Current power-ups are magnet, shield, score multiplier, and jump boost; elevated traversal and speed bonuses remain future additions.
-- Power-up icons and pickup models are functional procedural placeholders scheduled for Blender/asset work in Stage 3.
 - Automated tests emulate touch and mobile viewport behavior; physical-device testing remains required before release.
 
 ## Roadmap

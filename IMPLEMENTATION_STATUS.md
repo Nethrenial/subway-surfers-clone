@@ -4,7 +4,7 @@ Last updated: 2026-07-18
 
 ## Current Playable Build
 
-Neon Relay currently launches directly into an endless three-lane run. The player can switch lanes, jump, roll, collect common and rare signal currency, acquire four power-ups, survive one collision with a shield, pause, view a run summary, and restart. Track segments, obstacles, pickups, and effects are pooled; coin trails and particles are instanced; patterns are seeded; every hazard row retains a safe lane; and speed increases over time.
+Neon Relay opens on a complete main menu and runs as an endless three-lane courier trial. The player can switch lanes, jump, somersault-roll, collect common and rare signal currency, acquire four power-ups, survive one collision with a shield, pause, configure audio, view a run summary, and restart. Blender-authored assets, hierarchical character motion, animated hazards, procedural audio, batched city modules, deterministic patterns, and responsive presentation are integrated.
 
 ## Stage Checklist
 
@@ -71,25 +71,34 @@ Deferred from Stage 2 without blocking its loop: near-miss/combo scoring, jetpac
 
 ### Stage 3: Presentation
 
-Status: in progress; asset-production checkpoint complete.
-
-Work is intentionally paused before this stage while Blender and Blender MCP are configured. Stage 3 must inspect and use that pipeline where it improves hero pickups, obstacles, trains, drones, and environment modules.
+Status: complete and verified at the premium gate.
 
 - [x] Credential probe and external asset sourcing ledger
 - [x] Original Blender courier source and game-ready GLB
 - [x] Authored barrier, hurdle, gate, drone, and train GLBs
 - [x] Authored reward, power-up, and modular world kits
-- [x] Runtime GLB loading, normalization, procedural limb animation, diagnostics, and fallback handling
-- [x] Shared runtime PBR material roles and material-based model merging
-- [x] Scrolling district modules with grounded side platforms and distance-culling
+- [x] Runtime GLB loading, normalization, hierarchical joint animation, diagnostics, and fallback handling
+- [x] Shared runtime PBR roles, procedural panel/track textures, and pivot-safe material batching
+- [x] Scrolling district modules with grounded platforms, fog-hidden distance culling, and six modules batched into two recyclers
 - [x] Imported asset browser assertions and loading-screen transition
-- [ ] Final district lighting, render pipeline, animated scenery, and event VFX
-- [x] Character animation controller for run, jump, roll, and pack/helmet motion
-- [ ] Material library, particles, speed lines, and reward VFX
-- [ ] Production lighting, shadow tiers, fog, and render diagnostics
-- [ ] Generated or permissively licensed music and SFX
-- [ ] Full menu, loading, settings, selection, and polished HUD states
-- [ ] Ten-category visual scorecard and fresh-eyes review
+- [x] Neutral tone mapping, one shadow-casting key, controlled practical/rim lighting, fog, and desktop-only bloom
+- [x] Character animation for run cycle, airborne pose, hip-pivot roll, landing compression, lane lean, crash, pack, and signal ribbon
+- [x] Moving trains, hovering/rotating drones, gate teeth, hurdle blade, warning motion, and deterministic hazard showcase
+- [x] Instanced burst particles, speed streaks, shoe trails, and shield shell
+- [x] Procedural Web Audio music, ambience, movement, pickup, threat, and UI matrix with grouped volume controls
+- [x] Full menu, loading, settings, pause, failure, safe-area, and polished HUD states
+- [x] 18-state desktop/mobile visual regression harness
+- [x] Ten-category fresh-eyes scorecard: `23/30`, premium pass, showcase not claimed
+
+Verification evidence:
+
+- `npm run build`: pass under strict TypeScript
+- `npm run test:unit`: 18 assertions passed
+- `npm run verify:visual`: 4 active desktop/mobile browser tests passed; 2 desktop-only seeded deep-path tests passed and mobile variants intentionally skipped
+- Visual regression: 18 desktop/mobile baselines passed
+- Desktop active canvas: 132 calls, 176,154 triangles, 89 geometries, 19 textures, 2 post passes, 8.34 ms smoothed frame time
+- Mobile active canvas: 118 calls, 173,476 triangles, 88 geometries, 6 textures, 0 post passes, 10.53 ms smoothed frame time
+- Both tiers: nonblank canvas, within renderer budgets, no console/page errors
 
 ### Stage 4: Progression
 
@@ -109,27 +118,25 @@ Status: not started.
 
 - [ ] Low, medium, high, and auto quality presets
 - [ ] Adaptive DPR and measured frame-time response
-- [ ] Instanced or merged scenery to reduce mobile draw calls
+- [x] Instanced track decks and material-batched scenery reduce mobile calls without visible LOD switching
 - [ ] Accessibility and reduced-motion controls
-- [ ] Onboarding and tutorial sequence
+- [x] Compact non-obscuring onboarding hint with input-triggered dismissal
 - [ ] Visibility, focus, rotation, and rapid-input edge cases
 - [ ] Two-minute bot playtest and procedural fairness soak test
-- [ ] Visual regression baselines
+- [x] Visual regression baselines
 - [ ] Production preview, static-host verification, bundle review, and release report
 
 ## Known Bugs And Risks
 
 - No known Stage 1 or Stage 2 blocking bug after automated desktop/mobile verification.
-- The current obstacle visuals are deliberately foundation-grade and do not satisfy the final premium visual scorecard.
-- Static side scenery does not recycle yet and can make long runs feel visually repetitive.
-- Mobile active-play uses 121 calls against the initial 150-call target, leaving 29 calls of starting headroom for the first graphics pass.
+- The Stage 3 pass satisfies the premium scorecard but not the showcase gate; repeated city modules, reward vocabulary, and restrained impact VFX are the largest remaining visual gaps.
+- Mobile active play uses 118 calls against the 150-call hard budget after fidelity upgrades.
 - Physical iOS and Android touch/audio/performance checks have not yet run.
-- Full two-minute playtesting and long-run fairness testing are deferred until Stage 2 pattern depth is implemented.
+- Full two-minute bot playtesting remains a Stage 5 release task.
 
 ## Next Highest-Priority Work
 
-1. Confirm Blender MCP is exposed to the next OpenCode session and inspect its available operations.
-2. Run the director credential probe and complete the external asset sourcing ledger.
-3. Replace functional pickup and obstacle placeholders with optimized authored assets and collision proxies.
-4. Build the district environment kit, material library, character animation layer, and event-driven VFX.
-5. Generate/integrate the production audio matrix and verify browser unlock/volume behavior.
+1. Implement versioned local progression, missions, high scores, unlocks, and shop systems.
+2. Add progression and migration tests before exposing persistent save data.
+3. Expand environment and reward variation during Stage 5 only where measured budgets permit.
+4. Run physical-device and two-minute bot playtests before a release-ready claim.

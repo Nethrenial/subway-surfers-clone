@@ -51,6 +51,7 @@ export class Game {
   private rng = createSeededRandom(this.seedValue);
   private state: GameState = 'ready';
   private frame = 0;
+  private frameTimeMs = 16.67;
   private elapsed = 0;
   private speed = BASE_SPEED;
   private pausedForScreenshot = false;
@@ -94,11 +95,11 @@ export class Game {
       await this.assets.loadAll(onProgress);
       this.player.setVisual(this.assets.cloneHero());
       this.track.setObstacleTemplates({
-        barrier: this.assets.cloneArticulated('barrier', 'BarrierRoot', ['BarrierBeacon_', 'BarrierShock_']),
-        hurdle: this.assets.cloneArticulated('hurdle', 'HurdleRoot', ['HurdleBlade', 'HurdleLamp_']),
-        gate: this.assets.cloneArticulated('gate', 'GateRoot', ['GateTooth_', 'GateScanner']),
-        drone: this.assets.cloneArticulated('drone', 'DroneRoot', ['DroneBlade_', 'DroneRotor_', 'DroneRotorLight_']),
-        train: this.assets.cloneArticulated('train', 'TrainRoot', ['TrainDetail_Wheel_', 'TrainHeadlamp_', 'TrainRouteLight']),
+        barrier: this.assets.cloneMerged('barrier', 'BarrierRoot'),
+        hurdle: this.assets.cloneArticulated('hurdle', 'HurdleRoot', ['HurdleBlade']),
+        gate: this.assets.cloneArticulated('gate', 'GateRoot', ['GateTooth_-', 'GateTooth_0', 'GateScanner']),
+        drone: this.assets.cloneArticulated('drone', 'DroneRoot', ['DroneBlade_L_', 'DroneBlade_R_']),
+        train: this.assets.cloneMerged('train', 'TrainRoot'),
       });
       this.collectibles.setGeometries(
         this.assets.combinedGeometry('rewards', 'RelayTokenRoot'),
@@ -162,6 +163,7 @@ export class Game {
 
   private update(delta: number, _elapsed: number): void {
     this.frame += 1;
+    this.frameTimeMs = THREE.MathUtils.lerp(this.frameTimeMs, delta * 1000, 0.08);
     resizeRenderer(this.renderer, this.camera, 1.75);
     this.renderPipeline.resize();
     const input = this.input.consume();
@@ -452,6 +454,8 @@ export class Game {
         geometries: info.memory.geometries,
         textures: info.memory.textures,
         postPasses: this.renderPipeline.postPasses,
+        frameTimeMs: Number(this.frameTimeMs.toFixed(2)),
+        fps: Number((1000 / Math.max(0.01, this.frameTimeMs)).toFixed(1)),
       },
       canvas: {
         clientWidth: this.canvas.clientWidth,

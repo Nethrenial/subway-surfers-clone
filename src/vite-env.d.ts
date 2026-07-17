@@ -25,6 +25,8 @@ interface ThreeGameDiagnostics {
     geometries: number;
     textures: number;
     postPasses: number;
+    frameTimeMs: number;
+    fps: number;
   };
   canvas: {
     clientWidth: number;

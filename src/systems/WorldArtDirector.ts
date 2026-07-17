@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-const SEGMENT_LENGTH = 22;
-const SEGMENT_COUNT = 6;
+const MODULE_LENGTH = 22;
+const MODULES_PER_BATCH = 3;
+const BATCH_COUNT = 2;
+const BATCH_LENGTH = MODULE_LENGTH * MODULES_PER_BATCH;
 
 export interface WorldTemplates {
   arch: THREE.Object3D;
@@ -21,45 +23,51 @@ export class WorldArtDirector {
   private readonly platformMaterial = new THREE.MeshStandardMaterial({ color: '#081526', roughness: 0.84, metalness: 0.08 });
 
   constructor(templates: WorldTemplates) {
-    for (let index = 0; index < SEGMENT_COUNT; index += 1) {
+    for (let batchIndex = 0; batchIndex < BATCH_COUNT; batchIndex += 1) {
       const segment = new THREE.Group();
-      segment.position.z = 4 - index * SEGMENT_LENGTH;
-      const leftBuilding = (index % 2 === 0 ? templates.buildingA : templates.buildingB).clone(true);
-      const rightBuilding = (index % 3 === 0 ? templates.buildingB : templates.buildingA).clone(true);
-      leftBuilding.position.set(-8.2 - (index % 2), 0, -2);
-      rightBuilding.position.set(8.2 + (index % 3) * 0.5, 0, 2);
-      leftBuilding.rotation.y = Math.PI;
-      segment.add(leftBuilding, rightBuilding);
+      segment.position.z = 4 - batchIndex * BATCH_LENGTH;
+      const platformGeometry = new THREE.BoxGeometry(4.8, 0.42, MODULE_LENGTH);
+      for (let moduleIndex = 0; moduleIndex < MODULES_PER_BATCH; moduleIndex += 1) {
+        const index = batchIndex * MODULES_PER_BATCH + moduleIndex;
+        const module = new THREE.Group();
+        module.position.z = -moduleIndex * MODULE_LENGTH;
+        const leftBuilding = (index % 2 === 0 ? templates.buildingA : templates.buildingB).clone(true);
+        const rightBuilding = (index % 3 === 0 ? templates.buildingB : templates.buildingA).clone(true);
+        leftBuilding.position.set(-8.2 - (index % 2), 0, -2);
+        rightBuilding.position.set(8.2 + (index % 3) * 0.5, 0, 2);
+        leftBuilding.rotation.y = Math.PI;
+        module.add(leftBuilding, rightBuilding);
 
-      const leftNear = (index % 2 === 0 ? templates.pylon : templates.lamp).clone(true);
-      const rightNear = (index % 2 === 0 ? templates.lamp : templates.pylon).clone(true);
-      leftNear.position.set(-4.55, 0, 3.4);
-      rightNear.position.set(4.55, 0, -3.5);
-      rightNear.rotation.y = Math.PI;
-      segment.add(leftNear, rightNear);
+        const leftNear = (index % 2 === 0 ? templates.pylon : templates.lamp).clone(true);
+        const rightNear = (index % 2 === 0 ? templates.lamp : templates.pylon).clone(true);
+        leftNear.position.set(-4.55, 0, 3.4);
+        rightNear.position.set(4.55, 0, -3.5);
+        rightNear.rotation.y = Math.PI;
+        module.add(leftNear, rightNear);
 
-      if (index % 3 === 1) {
-        const billboard = templates.billboard.clone(true);
-        billboard.position.set(index % 2 === 0 ? -6 : 6, 0, 0);
-        billboard.rotation.y = index % 2 === 0 ? 0.28 : Math.PI - 0.28;
-        segment.add(billboard);
-      } else {
-        const utility = templates.utility.clone(true);
-        utility.position.set(index % 2 === 0 ? -5.7 : 5.7, 0, 0);
-        segment.add(utility);
+        if (index % 3 === 1) {
+          const billboard = templates.billboard.clone(true);
+          billboard.position.set(index % 2 === 0 ? -6 : 6, 0, 0);
+          billboard.rotation.y = index % 2 === 0 ? 0.28 : Math.PI - 0.28;
+          module.add(billboard);
+        } else {
+          const utility = templates.utility.clone(true);
+          utility.position.set(index % 2 === 0 ? -5.7 : 5.7, 0, 0);
+          module.add(utility);
+        }
+
+        if (index % 3 === 0) {
+          const arch = templates.arch.clone(true);
+          arch.position.z = -8;
+          module.add(arch);
+        }
+        const leftPlatform = new THREE.Mesh(platformGeometry, this.platformMaterial);
+        const rightPlatform = new THREE.Mesh(platformGeometry, this.platformMaterial);
+        leftPlatform.position.set(-6.4, -0.32, 0);
+        rightPlatform.position.set(6.4, -0.32, 0);
+        module.add(leftPlatform, rightPlatform);
+        segment.add(module);
       }
-
-      if (index % 3 === 0) {
-        const arch = templates.arch.clone(true);
-        arch.position.z = -8;
-        segment.add(arch);
-      }
-      const platformGeometry = new THREE.BoxGeometry(4.8, 0.42, SEGMENT_LENGTH);
-      const leftPlatform = new THREE.Mesh(platformGeometry, this.platformMaterial);
-      const rightPlatform = new THREE.Mesh(platformGeometry, this.platformMaterial);
-      leftPlatform.position.set(-6.4, -0.32, 0);
-      rightPlatform.position.set(6.4, -0.32, 0);
-      segment.add(leftPlatform, rightPlatform);
       this.mergeSegment(segment);
       platformGeometry.dispose();
       this.segments.push(segment);
@@ -73,7 +81,7 @@ export class WorldArtDirector {
     for (const segment of this.segments) {
       segment.position.z += speed * delta;
       if (segment.position.z > 18) {
-        segment.position.z = minZ - SEGMENT_LENGTH;
+        segment.position.z = minZ - BATCH_LENGTH;
         minZ = segment.position.z;
       }
     }
@@ -81,7 +89,7 @@ export class WorldArtDirector {
 
   reset(): void {
     for (let index = 0; index < this.segments.length; index += 1) {
-      this.segments[index].position.z = 4 - index * SEGMENT_LENGTH;
+      this.segments[index].position.z = 4 - index * BATCH_LENGTH;
     }
   }
 

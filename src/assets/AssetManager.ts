@@ -52,7 +52,7 @@ export class AssetManager {
     const clone = this.articulatedHero.clone(true);
     clone.traverse((object) => {
       if (object instanceof THREE.Mesh) {
-        object.castShadow = true;
+        object.castShadow = false;
         object.receiveShadow = true;
       }
     });
@@ -161,31 +161,41 @@ export class AssetManager {
       const meshes = node.children.filter((child): child is THREE.Mesh => (
         child instanceof THREE.Mesh && !movingPrefixes.some((prefix) => child.name.startsWith(prefix))
       ));
-      const groups = new Map<THREE.Material, THREE.Mesh[]>();
-      for (const mesh of meshes) {
-        const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-        const list = groups.get(material) ?? [];
-        list.push(mesh);
-        groups.set(material, list);
-      }
-      for (const [material, sourceMeshes] of groups) {
-        if (sourceMeshes.length < 2) continue;
-        const geometries = sourceMeshes.map((mesh) => {
-          mesh.updateMatrix();
-          const geometry = mesh.geometry.clone();
-          geometry.applyMatrix4(mesh.matrix);
-          return geometry;
-        });
-        const geometry = mergeGeometries(geometries, false);
-        for (const source of geometries) source.dispose();
-        if (!geometry) continue;
-        this.ownedGeometries.push(geometry);
-        for (const mesh of sourceMeshes) node.remove(mesh);
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.name = `${node.name}_${material.name}`;
-        node.add(mesh);
+      this.mergeMeshGroups(node, meshes, `${node.name}_static`);
+      for (const prefix of movingPrefixes) {
+        const movingMeshes = node.children.filter((child): child is THREE.Mesh => (
+          child instanceof THREE.Mesh && child.name.startsWith(prefix)
+        ));
+        this.mergeMeshGroups(node, movingMeshes, `${prefix}Merged`);
       }
     });
+  }
+
+  private mergeMeshGroups(node: THREE.Object3D, meshes: readonly THREE.Mesh[], name: string): void {
+    const groups = new Map<THREE.Material, THREE.Mesh[]>();
+    for (const mesh of meshes) {
+      const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+      const list = groups.get(material) ?? [];
+      list.push(mesh);
+      groups.set(material, list);
+    }
+    for (const [material, sourceMeshes] of groups) {
+      if (sourceMeshes.length < 2) continue;
+      const geometries = sourceMeshes.map((mesh) => {
+        mesh.updateMatrix();
+        const geometry = mesh.geometry.clone();
+        geometry.applyMatrix4(mesh.matrix);
+        return geometry;
+      });
+      const geometry = mergeGeometries(geometries, false);
+      for (const source of geometries) source.dispose();
+      if (!geometry) continue;
+      this.ownedGeometries.push(geometry);
+      for (const mesh of sourceMeshes) node.remove(mesh);
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.name = `${name}_${material.name}`;
+      node.add(mesh);
+    }
   }
 
   private computeDiagnostics(): void {

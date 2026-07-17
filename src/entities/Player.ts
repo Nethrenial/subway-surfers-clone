@@ -21,6 +21,9 @@ export class Player {
   jumpMultiplier = 1;
 
   private readonly bodyRoot = new THREE.Group();
+  private readonly shadowGeometry = new THREE.CapsuleGeometry(0.43, 1.12, 5, 8);
+  private readonly shadowMaterial = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+  private readonly shadowProxy = new THREE.Mesh(this.shadowGeometry, this.shadowMaterial);
   private readonly bodyMaterial = new THREE.MeshStandardMaterial({
     color: '#f1f7ff',
     roughness: 0.3,
@@ -47,7 +50,9 @@ export class Player {
 
   constructor() {
     this.position.set(0, 0, 4.1);
-    this.group.add(this.bodyRoot);
+    this.shadowProxy.position.y = 0.98;
+    this.shadowProxy.castShadow = true;
+    this.group.add(this.bodyRoot, this.shadowProxy);
     this.buildRunner();
   }
 
@@ -112,7 +117,7 @@ export class Player {
     if (this.state === 'rolling') {
       const progress = THREE.MathUtils.clamp(1 - this.rollRemaining / ROLL_DURATION, 0, 1);
       this.bodyRoot.rotation.x = 0;
-      this.bodyRoot.position.y = Math.sin(progress * Math.PI) * 0.16 + 0.06;
+      this.bodyRoot.position.y = Math.sin(progress * Math.PI) * 0.62 + 0.08;
     } else {
       this.bodyRoot.rotation.x = THREE.MathUtils.lerp(this.bodyRoot.rotation.x, 0, 1 - Math.exp(-14 * delta));
       this.bodyRoot.position.y = THREE.MathUtils.lerp(this.bodyRoot.position.y, 0, 1 - Math.exp(-18 * delta));
@@ -141,7 +146,7 @@ export class Player {
 
   setPoseForTest(state: 'jumping' | 'rolling'): void {
     this.state = state;
-    this.bodyRoot.position.set(0, state === 'rolling' ? 0.22 : 0, 0);
+    this.bodyRoot.position.set(0, state === 'rolling' ? 0.7 : 0, 0);
     this.bodyRoot.rotation.set(0, 0, 0);
     if (state === 'jumping') {
       this.position.y = 1.85;
@@ -170,6 +175,8 @@ export class Player {
     this.suitMaterial.dispose();
     this.accentMaterial.dispose();
     this.skinMaterial.dispose();
+    this.shadowGeometry.dispose();
+    this.shadowMaterial.dispose();
   }
 
   private isGrounded(): boolean {
@@ -198,7 +205,7 @@ export class Player {
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.set(...position);
       mesh.rotation.set(...rotation);
-      mesh.castShadow = true;
+      mesh.castShadow = false;
       mesh.receiveShadow = true;
       this.bodyRoot.add(mesh);
     };

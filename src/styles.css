@@ -411,19 +411,19 @@ body {
 
 .tutorial {
   position: absolute;
-  top: max(108px, calc(env(safe-area-inset-top) + 92px));
+  top: max(72px, calc(env(safe-area-inset-top) + 62px));
   bottom: auto;
   left: 50%;
   width: max-content;
-  max-width: 84%;
-  padding: 8px 14px;
+  max-width: 72%;
+  padding: 6px 10px;
   border: 1px solid rgba(94, 224, 255, 0.26);
   border-radius: 999px;
   color: rgba(235, 251, 255, 0.82);
   background: rgba(2, 11, 24, 0.62);
-  font-size: 0.68rem;
+  font-size: 0.56rem;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   transform: translateX(-50%);
   transition: opacity 400ms ease;

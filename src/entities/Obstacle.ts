@@ -102,24 +102,12 @@ export class Obstacle {
       this.group.position.z += worldSpeed * 0.72 * delta;
       profile.position.y = Math.abs(pulse) * 0.025;
       profile.rotation.z = pulse * 0.012;
-      this.poseParts(profile, 'TrainDetail_Wheel_', (part) => {
-        part.rotation.x += elapsed * 8.5;
-      });
-      this.poseParts(profile, 'TrainHeadlamp_', (part) => {
-        part.scale.setScalar(1 + Math.max(0, pulse) * 0.16);
-      });
-      this.poseParts(profile, 'TrainRouteLight', (part) => {
-        part.scale.x *= 0.94 + Math.max(0, pulse) * 0.08;
-      });
     } else if (this.type === 'drone') {
       profile.position.y = 0.12 + pulse * 0.08;
       profile.rotation.z = -pulse * 0.16;
       profile.rotation.y = Math.sin(elapsed * 2.4 + this.motionPhase) * 0.2;
       this.poseParts(profile, 'DroneBlade_', (part) => {
         part.rotation.y += elapsed * (part.name.includes('_L_') ? 19 : -19);
-      });
-      this.poseParts(profile, 'DroneRotorLight_', (part) => {
-        part.scale.setScalar(0.92 + Math.max(0, pulse) * 0.16);
       });
     } else if (this.type === 'gate') {
       profile.position.y = Math.max(0, pulse) * 0.08;
@@ -136,18 +124,8 @@ export class Obstacle {
       this.poseParts(profile, 'HurdleBlade', (part) => {
         part.rotation.x += pulse * 0.12;
       });
-      this.poseParts(profile, 'HurdleLamp_', (part) => {
-        part.scale.setScalar(0.9 + Math.max(0, pulse) * 0.2);
-      });
     } else {
       profile.position.y = Math.max(0, pulse) * 0.025;
-      this.poseParts(profile, 'BarrierBeacon_', (part) => {
-        part.position.y += Math.max(0, pulse) * 0.08;
-        part.scale.setScalar(0.9 + Math.max(0, pulse) * 0.18);
-      });
-      this.poseParts(profile, 'BarrierShock_', (part) => {
-        part.scale.y *= 0.94 + Math.max(0, -pulse) * 0.08;
-      });
     }
   }
 

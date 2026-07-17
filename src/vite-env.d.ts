@@ -7,13 +7,16 @@ interface ThreeGameDiagnostics {
   distance: number;
   speed: number;
   state: 'running' | 'paused' | 'game-over';
+  coins: number;
+  multiplier: number;
+  powerUps: Record<'magnet' | 'shield' | 'multiplier' | 'jump-boost', number>;
   player: {
     position: { x: number; y: number; z: number };
     lane: number;
     targetLane: number;
     state: 'running' | 'jumping' | 'rolling' | 'crashed';
   };
-  entities: { obstacles: number; segments: number };
+  entities: { obstacles: number; collectibles: number; segments: number };
   renderer: {
     calls: number;
     triangles: number;
@@ -41,6 +44,7 @@ interface ThreeGameTestHooks {
   /** Hide debug UI (lil-gui) before capturing. */
   hideDebugUi(hidden: boolean): void;
   input(action: 'left' | 'right' | 'jump' | 'roll' | 'pause' | 'restart'): void;
+  grantPowerUp(type: 'magnet' | 'shield' | 'multiplier' | 'jump-boost'): void;
 }
 
 interface Window {

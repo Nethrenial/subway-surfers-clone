@@ -11,6 +11,12 @@ export interface InputFrame {
 
 const SWIPE_THRESHOLD = 28;
 
+export function interpretSwipe(dx: number, dy: number, threshold = SWIPE_THRESHOLD): InputAction | null {
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < threshold) return null;
+  if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? 'left' : 'right';
+  return dy < 0 ? 'jump' : 'roll';
+}
+
 export class InputController {
   private readonly pending = new Set<InputAction>();
   private readonly frame: InputFrame = {
@@ -49,9 +55,8 @@ export class InputController {
     const dx = event.clientX - this.pointerStartX;
     const dy = event.clientY - this.pointerStartY;
     this.pointerId = null;
-    if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_THRESHOLD) return;
-    if (Math.abs(dx) > Math.abs(dy)) this.pending.add(dx < 0 ? 'left' : 'right');
-    else this.pending.add(dy < 0 ? 'jump' : 'roll');
+    const action = interpretSwipe(dx, dy);
+    if (action) this.pending.add(action);
   };
 
   private readonly onPointerCancel = () => {

@@ -1,40 +1,33 @@
 import * as THREE from 'three';
-import { Obstacle, type ObstacleResources, type ObstacleType } from '../entities/Obstacle';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { Obstacle, type ObstacleResources } from '../entities/Obstacle';
+import { createSegmentPattern, type HazardPlacement } from './PatternGenerator';
 import type { SeededRandom } from '../utils/random';
 
 const SEGMENT_LENGTH = 12;
 const SEGMENT_COUNT = 10;
 const RECYCLE_Z = 17;
 
-interface HazardPlacement {
-  lane: number;
-  z: number;
-  type: ObstacleType;
-}
-
 class TrackSegment {
   readonly group = new THREE.Group();
   readonly obstacles: Obstacle[] = [];
 
-  constructor(index: number, obstacleResources: ObstacleResources, trackMaterial: THREE.Material, laneMaterial: THREE.Material) {
-    const deck = new THREE.Mesh(new THREE.BoxGeometry(7.8, 0.28, SEGMENT_LENGTH), trackMaterial);
+  constructor(
+    index: number,
+    obstacleResources: ObstacleResources,
+    deckGeometry: THREE.BufferGeometry,
+    markingGeometry: THREE.BufferGeometry,
+    trackMaterial: THREE.Material,
+    laneMaterial: THREE.Material,
+  ) {
+    const deck = new THREE.Mesh(deckGeometry, trackMaterial);
     deck.position.y = -0.18;
     deck.receiveShadow = true;
     this.group.add(deck);
 
-    const laneGeometry = new THREE.BoxGeometry(0.055, 0.018, SEGMENT_LENGTH - 0.55);
-    for (const x of [-1.175, 1.175]) {
-      const lane = new THREE.Mesh(laneGeometry, laneMaterial);
-      lane.position.set(x, 0.012, 0);
-      this.group.add(lane);
-    }
-
-    const edgeGeometry = new THREE.BoxGeometry(0.16, 0.11, SEGMENT_LENGTH);
-    for (const x of [-3.82, 3.82]) {
-      const edge = new THREE.Mesh(edgeGeometry, laneMaterial);
-      edge.position.set(x, 0.08, 0);
-      this.group.add(edge);
-    }
+    const markings = new THREE.Mesh(markingGeometry, laneMaterial);
+    markings.receiveShadow = true;
+    this.group.add(markings);
 
     for (let i = 0; i < 4; i += 1) {
       const obstacle = new Obstacle(obstacleResources);
@@ -47,7 +40,7 @@ class TrackSegment {
   configure(placements: readonly HazardPlacement[]): void {
     for (let i = 0; i < this.obstacles.length; i += 1) {
       const placement = placements[i];
-      if (placement) this.obstacles[i].configure(placement.type, placement.lane, placement.z);
+      if (placement) this.obstacles[i].configure(placement.type, placement.lane, placement.z, placement.motionAmplitude);
       else this.obstacles[i].disable();
     }
   }
@@ -72,10 +65,28 @@ export class TrackManager {
       roughness: 0.28,
     });
     this.materials.push(trackMaterial, laneMaterial);
+    const deckGeometry = new THREE.BoxGeometry(7.8, 0.28, SEGMENT_LENGTH);
+    const markingParts = [
+      translatedBox(0.055, 0.018, SEGMENT_LENGTH - 0.55, -1.175, 0.012, 0),
+      translatedBox(0.055, 0.018, SEGMENT_LENGTH - 0.55, 1.175, 0.012, 0),
+      translatedBox(0.16, 0.11, SEGMENT_LENGTH, -3.82, 0.08, 0),
+      translatedBox(0.16, 0.11, SEGMENT_LENGTH, 3.82, 0.08, 0),
+    ];
+    const markingGeometry = mergeGeometries(markingParts, false);
+    for (const part of markingParts) part.dispose();
+    if (!markingGeometry) throw new Error('Could not merge track marking geometry.');
+    this.geometries.push(deckGeometry, markingGeometry);
     const obstacleResources = this.createObstacleResources();
 
     for (let i = 0; i < SEGMENT_COUNT; i += 1) {
-      const segment = new TrackSegment(i, obstacleResources, trackMaterial, laneMaterial);
+      const segment = new TrackSegment(
+        i,
+        obstacleResources,
+        deckGeometry,
+        markingGeometry,
+        trackMaterial,
+        laneMaterial,
+      );
       this.segments.push(segment);
       this.obstacles.push(...segment.obstacles);
       this.group.add(segment.group);
@@ -83,18 +94,21 @@ export class TrackManager {
     this.reset(rng);
   }
 
-  update(delta: number, speed: number): void {
+  update(delta: number, elapsed: number, speed: number): void {
     this.distance += speed * delta;
     let minZ = Infinity;
     for (const segment of this.segments) minZ = Math.min(minZ, segment.group.position.z);
 
     for (const segment of this.segments) {
-      for (const obstacle of segment.obstacles) obstacle.previousWorldZ = obstacle.worldZ();
+      for (const obstacle of segment.obstacles) {
+        obstacle.previousWorldZ = obstacle.worldZ();
+        if (obstacle.active) obstacle.updateMotion(elapsed);
+      }
       segment.group.position.z += speed * delta;
       if (segment.group.position.z > RECYCLE_Z) {
         segment.group.position.z = minZ - SEGMENT_LENGTH;
         minZ = segment.group.position.z;
-        segment.configure(this.createPattern(this.generation));
+        segment.configure(createSegmentPattern(this.generation, this.rng));
         this.generation += 1;
         for (const obstacle of segment.obstacles) obstacle.previousWorldZ = obstacle.worldZ();
       }
@@ -108,7 +122,7 @@ export class TrackManager {
     for (let i = 0; i < this.segments.length; i += 1) {
       const segment = this.segments[i];
       segment.group.position.set(0, 0, 4 - i * SEGMENT_LENGTH);
-      segment.configure(this.createPattern(this.generation));
+      segment.configure(createSegmentPattern(this.generation, this.rng));
       this.generation += 1;
       for (const obstacle of segment.obstacles) obstacle.previousWorldZ = obstacle.worldZ();
     }
@@ -117,25 +131,6 @@ export class TrackManager {
   dispose(): void {
     for (const geometry of this.geometries) geometry.dispose();
     for (const material of this.materials) material.dispose();
-  }
-
-  private createPattern(generation: number): HazardPlacement[] {
-    if (generation < 2) return [];
-    const safeLane = Math.floor(this.rng() * 3);
-    const typeRoll = this.rng();
-    const type: ObstacleType = typeRoll < 0.38 ? 'hurdle' : typeRoll < 0.68 ? 'gate' : 'barrier';
-    const placements: HazardPlacement[] = [];
-    const dense = generation > 5 && this.rng() > 0.38;
-    const blockedLanes = [0, 1, 2].filter((lane) => lane !== safeLane);
-    placements.push({ lane: blockedLanes[0], z: -1.8, type });
-    if (dense) placements.push({ lane: blockedLanes[1], z: -1.8, type: this.rng() > 0.5 ? type : 'barrier' });
-    if (generation > 4 && this.rng() > 0.5) {
-      const secondSafeLane = blockedLanes[Math.floor(this.rng() * blockedLanes.length)];
-      const secondBlocked = [0, 1, 2].filter((lane) => lane !== secondSafeLane);
-      placements.push({ lane: secondBlocked[0], z: 3.4, type: this.rng() > 0.5 ? 'hurdle' : 'gate' });
-      if (this.rng() > 0.62) placements.push({ lane: secondBlocked[1], z: 3.4, type: 'barrier' });
-    }
-    return placements;
   }
 
   private createObstacleResources(): ObstacleResources {
@@ -180,6 +175,24 @@ export class TrackManager {
     gate.add(mesh(new THREE.BoxGeometry(0.18, 2.38, 0.54), frame, 0.9, 1.19));
     gate.add(mesh(new THREE.BoxGeometry(2, 0.5, 0.7), warning, 0, 1.72));
     gate.add(mesh(new THREE.BoxGeometry(0.8, 0.12, 0.76), signal, 0, 1.45, -0.02));
-    return { barrier, hurdle, gate };
+
+    const drone = new THREE.Group();
+    drone.add(mesh(new THREE.SphereGeometry(0.54, 12, 8), frame, 0, 0.94));
+    drone.add(mesh(new THREE.BoxGeometry(1.62, 0.12, 0.34), warning, 0, 0.96));
+    drone.add(mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.18, 12), signal, 0, 0.94, -0.52));
+    drone.add(mesh(new THREE.TorusGeometry(0.68, 0.055, 6, 16), signal, 0, 0.94));
+
+    const train = new THREE.Group();
+    train.add(mesh(new THREE.BoxGeometry(1.9, 2.65, 5), frame, 0, 1.34));
+    train.add(mesh(new THREE.BoxGeometry(1.72, 0.64, 0.12), warning, 0, 1.92, 2.54));
+    train.add(mesh(new THREE.BoxGeometry(1.15, 0.42, 0.14), signal, 0, 1.94, 2.62));
+    train.add(mesh(new THREE.BoxGeometry(1.42, 0.18, 0.16), signal, 0, 0.62, 2.62));
+    return { barrier, hurdle, gate, drone, train };
   }
+}
+
+function translatedBox(width: number, height: number, depth: number, x: number, y: number, z: number): THREE.BufferGeometry {
+  const geometry = new THREE.BoxGeometry(width, height, depth);
+  geometry.translate(x, y, z);
+  return geometry;
 }

@@ -107,6 +107,79 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.distance-cluster b {
+  color: #ff5fa9;
+  font-weight: 900;
+}
+
+.currency-cluster {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 42px;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.currency-cluster i {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #ffd75e;
+  transform: rotate(45deg);
+  box-shadow: 0 0 10px rgba(255, 215, 94, 0.55);
+}
+
+#power-strip {
+  position: absolute;
+  top: max(76px, calc(env(safe-area-inset-top) + 62px));
+  right: max(14px, env(safe-area-inset-right));
+  left: max(14px, env(safe-area-inset-left));
+  z-index: 2;
+  display: flex;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.power-chip {
+  display: none;
+  min-width: 56px;
+  padding: 5px 7px 4px;
+  border: 1px solid rgba(173, 235, 255, 0.24);
+  border-radius: 3px;
+  background: rgba(4, 14, 28, 0.72);
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+}
+
+.power-chip.is-active {
+  display: grid;
+  gap: 3px;
+}
+
+.power-chip span {
+  font-size: 0.52rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.power-chip i {
+  display: block;
+  width: var(--power-progress, 100%);
+  height: 2px;
+  background: #40edff;
+  box-shadow: 0 0 7px currentColor;
+}
+
+.power-chip.magnet i,
+.power-chip.multiplier i {
+  background: #ff5fa9;
+}
+
+.power-chip.jump-boost i {
+  background: #9dff67;
+}
+
 .icon-button {
   width: 42px;
   height: 42px;

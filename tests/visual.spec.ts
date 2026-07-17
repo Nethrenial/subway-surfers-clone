@@ -146,3 +146,49 @@ test('a real seeded hazard collision ends and restarts the run', async ({ page }
   expect(consoleErrors).toEqual([]);
   expect(pageErrors).toEqual([]);
 });
+
+test('collectibles, power-ups, and shield recovery affect a real run', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'Mobile gesture and HUD fit are covered by the main interaction test.');
+  const consoleErrors: string[] = [];
+  const pageErrors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
+  await page.goto('/');
+  await page.waitForFunction(() => (window.__THREE_GAME_DIAGNOSTICS__?.frame ?? 0) > 10);
+  await page.evaluate(() => window.__THREE_GAME_TEST_HOOKS__?.setState('active-play'));
+  await expect
+    .poll(async () => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.coins ?? 0), { timeout: 3_000 })
+    .toBeGreaterThan(0);
+  await expect(page.locator('#coin-value')).not.toHaveText('0');
+
+  await page.evaluate(() => window.__THREE_GAME_TEST_HOOKS__?.setState('power-up-test'));
+  await expect
+    .poll(async () => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.powerUps.magnet ?? 0))
+    .toBeGreaterThan(8);
+  await expect(page.locator('[data-power="magnet"]')).toHaveClass(/is-active/);
+
+  await page.evaluate(() => window.__THREE_GAME_TEST_HOOKS__?.grantPowerUp('multiplier'));
+  await expect.poll(async () => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.multiplier)).toBe(2);
+  await expect(page.locator('#multiplier-value')).toHaveText('x2');
+
+  await page.evaluate(() => {
+    window.__THREE_GAME_TEST_HOOKS__?.setState('active-play');
+    window.__THREE_GAME_TEST_HOOKS__?.grantPowerUp('shield');
+  });
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const diagnostics = window.__THREE_GAME_DIAGNOSTICS__;
+          return diagnostics?.state === 'running' && diagnostics.powerUps.shield === 0;
+        }),
+      { timeout: 7_000 },
+    )
+    .toBe(true);
+  await expect(page.locator('#game-over-overlay')).not.toHaveClass(/is-visible/);
+  expect(consoleErrors).toEqual([]);
+  expect(pageErrors).toEqual([]);
+});

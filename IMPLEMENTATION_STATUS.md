@@ -4,7 +4,7 @@ Last updated: 2026-07-18
 
 ## Current Playable Build
 
-Neon Relay currently launches directly into an endless three-lane run. The player can switch lanes, jump, roll, pause, collide, view a run summary, and restart. Track segments and obstacle profiles are reused, patterns are seeded, each hazard row retains a safe lane, and speed increases over time.
+Neon Relay currently launches directly into an endless three-lane run. The player can switch lanes, jump, roll, collect common and rare signal currency, acquire four power-ups, survive one collision with a shield, pause, view a run summary, and restart. Track segments, obstacles, pickups, and effects are pooled; coin trails and particles are instanced; patterns are seeded; every hazard row retains a safe lane; and speed increases over time.
 
 ## Stage Checklist
 
@@ -40,21 +40,40 @@ Verification evidence:
 
 ### Stage 2: Gameplay Depth
 
-Status: not started.
+Status: complete and verified.
 
-- [ ] Collectible currency and trails
-- [ ] Moving hazards and large transit hazards
-- [ ] Magnet, shield, multiplier, jump boost, and elevated traversal power-ups
-- [ ] Explicit power-up stacking/replacement rules and duration HUD
-- [ ] Near-miss and combo scoring
-- [ ] Pattern grammar with authored compression/release beats
-- [ ] Object pools for collectibles and effects
-- [ ] Unit tests for procedural safety and player state transitions
-- [ ] Collision, pickup, and power-up feedback stack
+- [x] Instanced common collectible trails and rare five-value shards
+- [x] Raised collectible arcs and lane trails for route teaching/risk-reward
+- [x] Moving lane-sweeping drone hazards
+- [x] Large long-collider transit train hazards
+- [x] Magnet, shield, score multiplier, and jump-boost powers
+- [x] Different powers coexist; same-type pickup refreshes duration; shield is consumed on one collision
+- [x] Active duration HUD and multiplier/currency feedback
+- [x] Pure pattern grammar with one guaranteed safe lane per hazard row
+- [x] Object pools for collectible data, power-up pickups, and burst effects
+- [x] Instanced rendering for collectibles and particles
+- [x] Shared merged track-marking geometry to preserve mobile render headroom
+- [x] Trauma, flash, HUD punch, particles, and shield recovery feedback
+- [x] Unit tests for pooling, scoring, gestures, player transitions, power-up rules, and generator safety
+- [x] Real browser tests for collection, power pickup, multiplier state, and shielded collision
+
+Verification evidence:
+
+- `npm run build`: pass under strict TypeScript
+- `npm test`: 16 unit assertions and 4 active browser integration tests passed
+- Procedural safety: 10,000 seeded generations plus hazard-family coverage passed
+- Desktop active canvas: nonblank, no console/page errors, 121 calls, 9,052 triangles, 37 geometries
+- Mobile active canvas: nonblank, no console/page errors, 121 calls, 8,956 triangles, 37 geometries
+- Mobile draw calls reduced from the pre-optimization 149 to 121
+- Screenshots: `artifacts/stage2-desktop/desktop-active-play.png` and `artifacts/stage2-mobile/mobile-active-play.png` (generated locally and ignored by Git)
+
+Deferred from Stage 2 without blocking its loop: near-miss/combo scoring, jetpack/elevated traversal, and speed bonuses are additional depth rather than requirements for the implemented collectible/power-up loop.
 
 ### Stage 3: Presentation
 
 Status: not started.
+
+Work is intentionally paused before this stage while Blender and Blender MCP are configured. Stage 3 must inspect and use that pipeline where it improves hero pickups, obstacles, trains, drones, and environment modules.
 
 - [ ] Credential probe and external asset sourcing ledger
 - [ ] Original hero character concept and game-ready generated/imported asset, if credentials allow
@@ -94,17 +113,17 @@ Status: not started.
 
 ## Known Bugs And Risks
 
-- No known Stage 1 blocking bug after automated desktop/mobile verification.
+- No known Stage 1 or Stage 2 blocking bug after automated desktop/mobile verification.
 - The current obstacle visuals are deliberately foundation-grade and do not satisfy the final premium visual scorecard.
 - Static side scenery does not recycle yet and can make long runs feel visually repetitive.
-- Mobile active-play uses 146 calls against the initial 150-call target; visual expansion must reduce existing calls before adding density.
+- Mobile active-play uses 121 calls against the initial 150-call target, leaving 29 calls of starting headroom for the first graphics pass.
 - Physical iOS and Android touch/audio/performance checks have not yet run.
 - Full two-minute playtesting and long-run fairness testing are deferred until Stage 2 pattern depth is implemented.
 
 ## Next Highest-Priority Work
 
-1. Add collectible and effect pools with coin trails that teach safe paths.
-2. Expand pattern grammar with moving hazards, safe-path validation, and compression/recovery phases.
-3. Add shield, magnet, multiplier, and jump-boost power-ups with explicit state rules.
-4. Add unit coverage for player transitions and generator safety.
-5. Verify Stage 2 in desktop/mobile browsers and commit the next playable checkpoint.
+1. Confirm Blender MCP is exposed to the next OpenCode session and inspect its available operations.
+2. Run the director credential probe and complete the external asset sourcing ledger.
+3. Replace functional pickup and obstacle placeholders with optimized authored assets and collision proxies.
+4. Build the district environment kit, material library, character animation layer, and event-driven VFX.
+5. Generate/integrate the production audio matrix and verify browser unlock/volume behavior.

@@ -24,9 +24,18 @@
           </div>
           <div class="distance-cluster">
             <span id="distance-value">0 m</span>
-            <small id="speed-value">42 km/h</small>
+            <small><span id="speed-value">42 km/h</span> / <b id="multiplier-value">x1</b></small>
+          </div>
+          <div class="currency-cluster" aria-label="Collected signal shards">
+            <i></i><strong id="coin-value">0</strong>
           </div>
           <button id="pause-button" class="icon-button" type="button" aria-label="Pause game">II</button>
+        </section>
+        <section id="power-strip" aria-label="Active power-ups">
+          <div class="power-chip magnet" data-power="magnet"><span>Magnet</span><i></i></div>
+          <div class="power-chip shield" data-power="shield"><span>Shield</span><i></i></div>
+          <div class="power-chip multiplier" data-power="multiplier"><span>x2</span><i></i></div>
+          <div class="power-chip jump-boost" data-power="jump-boost"><span>Jump+</span><i></i></div>
         </section>
         <div id="tutorial" class="tutorial">Swipe or use arrow keys</div>
         <section id="pause-overlay" class="overlay" aria-hidden="true">

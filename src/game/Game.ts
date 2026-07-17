@@ -4,8 +4,12 @@ import { Loop } from '../core/Loop';
 import { createRenderer, resizeRenderer } from '../core/Renderer';
 import { Player } from '../entities/Player';
 import { CameraRig } from '../systems/CameraRig';
+import { CollectibleSystem } from '../systems/CollectibleSystem';
 import { CollisionSystem } from '../systems/CollisionSystem';
+import { EffectsManager } from '../systems/EffectsManager';
 import { Hud } from '../systems/Hud';
+import { PowerUpSystem, type PowerUpType } from '../systems/PowerUpSystem';
+import { ScoreSystem } from '../systems/ScoreSystem';
 import { TrackManager } from '../systems/TrackManager';
 import { createSeededRandom } from '../utils/random';
 
@@ -22,16 +26,20 @@ export class Game {
   private readonly player = new Player();
   private readonly collision = new CollisionSystem();
   private readonly cameraRig = new CameraRig(this.camera);
+  private readonly scoreSystem = new ScoreSystem();
+  private readonly effects = new EffectsManager();
   private readonly track: TrackManager;
+  private readonly collectibles: CollectibleSystem;
+  private readonly powerUps: PowerUpSystem;
   private readonly hud: Hud;
   private readonly loop = new Loop((delta, elapsed) => this.update(delta, elapsed), () => this.render());
   private readonly worldRoot = new THREE.Group();
-  private rng = createSeededRandom(7);
+  private seedValue = 7;
+  private rng = createSeededRandom(this.seedValue);
   private state: GameState = 'running';
   private frame = 0;
   private elapsed = 0;
   private speed = BASE_SPEED;
-  private score = 0;
   private pausedForScreenshot = false;
   private reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private tutorialTime = 0;
@@ -47,6 +55,8 @@ export class Game {
       () => this.resetRun(),
     );
     this.track = new TrackManager(this.rng);
+    this.collectibles = new CollectibleSystem(this.rng);
+    this.powerUps = new PowerUpSystem(this.rng);
     this.createScene();
     resizeRenderer(this.renderer, this.camera, 1.75);
     this.installTestHooks();
@@ -61,6 +71,9 @@ export class Game {
     this.loop.stop();
     this.input.dispose();
     this.track.dispose();
+    this.collectibles.dispose();
+    this.powerUps.dispose();
+    this.effects.dispose();
     this.player.dispose();
     this.renderer.dispose();
     window.__THREE_GAME_DIAGNOSTICS__ = undefined;
@@ -87,14 +100,45 @@ export class Game {
     if (this.tutorialTime > 4 || input.left || input.right || input.jump || input.roll) this.hud.hideTutorial();
 
     this.speed = Math.min(MAX_SPEED, BASE_SPEED + this.elapsed * 0.075);
+    this.player.jumpMultiplier = this.powerUps.jumpMultiplier;
     this.player.update(delta, input);
-    this.track.update(delta, this.speed);
+    this.track.update(delta, this.elapsed, this.speed);
+    const collectedPower = this.powerUps.update(delta, this.speed, this.player);
+    if (collectedPower) {
+      this.effects.burst(this.player.position.x, this.player.position.y + 1, this.player.position.z);
+      this.cameraRig.addTrauma(0.16);
+      this.hud.flashPowerUp();
+    }
+    const collection = this.collectibles.update(delta, this.speed, this.player, this.powerUps.magnetActive);
+    if (collection.count > 0) {
+      this.scoreSystem.collect(collection.value, this.powerUps.scoreMultiplier);
+      this.effects.burst(collection.x, collection.y, collection.z);
+      this.cameraRig.addTrauma(0.08);
+      this.hud.flashCollect();
+    }
     const hit = this.collision.findPlayerHit(this.player, this.track.obstacles);
-    if (hit) this.endRun();
+    if (hit) {
+      if (this.powerUps.consumeShield()) {
+        hit.disable();
+        this.cameraRig.addTrauma(0.42);
+        this.effects.burst(this.player.position.x, this.player.position.y + 1, this.player.position.z);
+        this.hud.flashShield();
+      } else {
+        this.endRun();
+      }
+    }
 
-    this.score = this.track.distance * 10 + this.elapsed * this.speed;
+    this.scoreSystem.update(delta, this.speed, this.powerUps.scoreMultiplier);
+    this.effects.update(delta);
     this.cameraRig.update(delta, this.player.position.x, this.reducedMotion);
-    this.hud.update(this.score, this.track.distance, this.speed);
+    this.hud.update(
+      this.scoreSystem.score,
+      this.scoreSystem.distance,
+      this.speed,
+      this.scoreSystem.coins,
+      this.powerUps.scoreMultiplier,
+      this.powerUps.remaining,
+    );
     this.publishDiagnostics();
   }
 
@@ -123,7 +167,7 @@ export class Game {
     rim.position.set(0, 3, 7);
     this.scene.add(rim);
 
-    this.worldRoot.add(this.track.group);
+    this.worldRoot.add(this.track.group, this.collectibles.group, this.powerUps.group, this.effects.group);
     this.worldRoot.add(this.createCityBackdrop());
     this.scene.add(this.worldRoot);
     this.scene.add(this.player.group);
@@ -153,13 +197,13 @@ export class Game {
   private pause(): void {
     if (this.state !== 'running') return;
     this.state = 'paused';
-    this.hud.setState('paused', this.score, this.track.distance);
+    this.hud.setState('paused', this.scoreSystem.score, this.scoreSystem.distance);
   }
 
   private resume(): void {
     if (this.state !== 'paused') return;
     this.state = 'running';
-    this.hud.setState('running', this.score, this.track.distance);
+    this.hud.setState('running', this.scoreSystem.score, this.scoreSystem.distance);
   }
 
   private endRun(): void {
@@ -167,33 +211,40 @@ export class Game {
     this.player.crash();
     this.cameraRig.addTrauma(0.85);
     this.hud.flashImpact();
-    this.hud.setState('game-over', this.score, this.track.distance);
+    this.hud.setState('game-over', this.scoreSystem.score, this.scoreSystem.distance);
   }
 
-  private resetRun(): void {
-    this.rng = createSeededRandom(7);
+  private resetRun(seed = this.seedValue): void {
+    this.seedValue = seed;
+    this.rng = createSeededRandom(seed);
     this.state = 'running';
     this.elapsed = 0;
     this.speed = BASE_SPEED;
-    this.score = 0;
     this.tutorialTime = 0;
     this.player.reset();
     this.track.reset(this.rng);
+    this.collectibles.reset(this.rng);
+    this.powerUps.reset(this.rng);
+    this.effects.reset();
+    this.scoreSystem.reset();
     this.cameraRig.snap(0);
-    this.hud.update(0, 0, this.speed);
+    this.hud.update(0, 0, this.speed, 0, 1, this.powerUps.remaining);
     this.hud.setState('running', 0, 0);
   }
 
   private installTestHooks(): void {
     window.__THREE_GAME_TEST_HOOKS__ = {
       seed: (value: number) => {
-        this.rng = createSeededRandom(value);
-        this.track.reset(this.rng);
+        this.resetRun(value);
       },
       setState: (name: string) => {
         if (name === 'active-play') this.resetRun();
         else if (name === 'game-over') this.endRun();
         else if (name === 'paused') this.pause();
+        else if (name === 'power-up-test') {
+          this.resetRun();
+          this.powerUps.spawnForTest('magnet', this.player);
+        }
         else console.warn(`Unknown test state: ${name}`);
       },
       setPausedForScreenshot: (paused: boolean) => {
@@ -204,6 +255,7 @@ export class Game {
       },
       hideDebugUi: () => undefined,
       input: (action: InputAction) => this.input.queue(action),
+      grantPowerUp: (type: PowerUpType) => this.powerUps.activate(type),
     };
   }
 
@@ -212,10 +264,13 @@ export class Game {
     window.__THREE_GAME_DIAGNOSTICS__ = {
       frame: this.frame,
       elapsed: this.elapsed,
-      score: this.score,
-      distance: this.track.distance,
+      score: this.scoreSystem.score,
+      distance: this.scoreSystem.distance,
       speed: this.speed,
       state: this.state,
+      coins: this.scoreSystem.coins,
+      multiplier: this.powerUps.scoreMultiplier,
+      powerUps: { ...this.powerUps.remaining },
       player: {
         position: { x: this.player.position.x, y: this.player.position.y, z: this.player.position.z },
         lane: this.player.lane,
@@ -224,6 +279,7 @@ export class Game {
       },
       entities: {
         obstacles: this.track.obstacles.filter((obstacle) => obstacle.active).length,
+        collectibles: this.collectibles.pool.activeCount,
         segments: 10,
       },
       renderer: {

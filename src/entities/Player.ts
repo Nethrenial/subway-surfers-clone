@@ -17,6 +17,7 @@ export class Player {
   lane = 1;
   targetLane = 1;
   verticalVelocity = 0;
+  jumpMultiplier = 1;
 
   private readonly bodyRoot = new THREE.Group();
   private readonly bodyMaterial = new THREE.MeshStandardMaterial({
@@ -137,7 +138,7 @@ export class Player {
   }
 
   private startJump(): void {
-    this.verticalVelocity = JUMP_VELOCITY;
+    this.verticalVelocity = JUMP_VELOCITY * this.jumpMultiplier;
     this.state = 'jumping';
   }
 

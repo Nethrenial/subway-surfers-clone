@@ -3,4 +3,5 @@ dist/
 test-results/
 artifacts/
 *.log
+*.blend1
 .DS_Store

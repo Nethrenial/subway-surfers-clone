@@ -71,13 +71,16 @@ Deferred from Stage 2 without blocking its loop: near-miss/combo scoring, jetpac
 
 ### Stage 3: Presentation
 
-Status: not started.
+Status: in progress; asset-production checkpoint complete.
 
 Work is intentionally paused before this stage while Blender and Blender MCP are configured. Stage 3 must inspect and use that pipeline where it improves hero pickups, obstacles, trains, drones, and environment modules.
 
-- [ ] Credential probe and external asset sourcing ledger
-- [ ] Original hero character concept and game-ready generated/imported asset, if credentials allow
-- [ ] District art direction, authored environment kit, and animated scenery
+- [x] Credential probe and external asset sourcing ledger
+- [x] Original Blender courier source and game-ready GLB
+- [x] Authored barrier, hurdle, gate, drone, and train GLBs
+- [x] Authored reward, power-up, and modular world kits
+- [ ] Runtime GLB loading, normalization, animation, and fallback handling
+- [ ] District art direction integration and animated scenery
 - [ ] Character animation controller
 - [ ] Material library, particles, speed lines, and reward VFX
 - [ ] Production lighting, shadow tiers, fog, and render diagnostics

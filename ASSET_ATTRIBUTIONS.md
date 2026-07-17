@@ -2,7 +2,22 @@
 
 ## Runtime Assets
 
-Neon Relay Stage 1 uses no external art, models, textures, fonts, music, or sound effects. All visible game content is procedural Three.js geometry, generated canvas output, and CSS authored for this project.
+Neon Relay uses no externally sourced art, models, textures, fonts, music, or sound effects at the current checkpoint.
+
+Stage 3 Blender assets are original in-house works created for this project through Blender MCP and the reproducible script in `scripts/blender/`. Editable source is maintained at `art/blender/neon-relay-stage3.blend`.
+
+Runtime model outputs:
+
+- `public/assets/models/neon-courier.glb`
+- `public/assets/models/barrier-premium.glb`
+- `public/assets/models/hurdle-premium.glb`
+- `public/assets/models/gate-premium.glb`
+- `public/assets/models/drone-premium.glb`
+- `public/assets/models/train-premium.glb`
+- `public/assets/models/reward-power-kit.glb`
+- `public/assets/models/world-kit.glb`
+
+These assets are project-owned and require no third-party attribution.
 
 ## Libraries
 

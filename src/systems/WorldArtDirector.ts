@@ -49,7 +49,11 @@ export class WorldArtDirector {
         segment.add(utility);
       }
 
-      if (index % 3 === 0) segment.add(templates.arch.clone(true));
+      if (index % 3 === 0) {
+        const arch = templates.arch.clone(true);
+        arch.position.z = -8;
+        segment.add(arch);
+      }
       const platformGeometry = new THREE.BoxGeometry(4.8, 0.42, SEGMENT_LENGTH);
       const leftPlatform = new THREE.Mesh(platformGeometry, this.platformMaterial);
       const rightPlatform = new THREE.Mesh(platformGeometry, this.platformMaterial);

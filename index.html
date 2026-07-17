@@ -23,6 +23,17 @@
           <div id="loading-progress"><i></i></div>
           <small>Calibrating night circuit</small>
         </section>
+        <section id="main-menu" aria-label="Neon Relay main menu">
+          <div class="menu-signal" aria-hidden="true"><i></i><i></i><i></i></div>
+          <span class="eyebrow">Stormline courier trials</span>
+          <h1>NEON<br />RELAY</h1>
+          <p>Carry the signal through a city moving faster than the storm.</p>
+          <div class="menu-actions">
+            <button id="start-button" class="primary-button" type="button">Run circuit</button>
+            <button id="menu-settings-button" class="secondary-button" type="button">Audio &amp; access</button>
+          </div>
+          <div class="menu-route"><span>Night circuit</span><strong>NR-01</strong><i></i></div>
+        </section>
         <canvas id="game-canvas" aria-label="Neon Relay endless runner"></canvas>
         <section id="hud" aria-live="polite">
           <div class="score-cluster">
@@ -44,13 +55,14 @@
           <div class="power-chip multiplier" data-power="multiplier"><span>x2</span><i></i></div>
           <div class="power-chip jump-boost" data-power="jump-boost"><span>Jump+</span><i></i></div>
         </section>
-        <div id="tutorial" class="tutorial">Swipe or use arrow keys</div>
+        <div id="tutorial" class="tutorial">Swipe to dodge, jump, and roll</div>
         <section id="pause-overlay" class="overlay" aria-hidden="true">
           <div class="overlay-card">
             <span class="eyebrow">Courier on hold</span>
             <h1>Paused</h1>
             <p>Scan ahead. Every pattern leaves a route.</p>
             <button id="resume-button" class="primary-button" type="button">Resume run</button>
+            <button id="pause-settings-button" class="secondary-button" type="button">Audio &amp; access</button>
           </div>
         </section>
         <section id="game-over-overlay" class="overlay" aria-hidden="true">
@@ -66,7 +78,17 @@
               <strong id="final-distance-value">0 m</strong>
             </div>
             <button id="restart-button" class="primary-button" type="button">Run again</button>
-            <small>Press Enter or Space</small>
+            <small>Tap or press Run again</small>
+          </div>
+        </section>
+        <section id="settings-overlay" class="overlay" aria-hidden="true">
+          <div class="overlay-card settings-card">
+            <span class="eyebrow">Signal calibration</span>
+            <h1>Audio</h1>
+            <label><span>Master</span><output id="master-output">80</output><input id="master-volume" type="range" min="0" max="100" value="80" /></label>
+            <label><span>Music</span><output id="music-output">55</output><input id="music-volume" type="range" min="0" max="100" value="55" /></label>
+            <label><span>Effects</span><output id="sfx-output">80</output><input id="sfx-volume" type="range" min="0" max="100" value="80" /></label>
+            <button id="settings-close-button" class="primary-button" type="button">Apply</button>
           </div>
         </section>
         <div id="impact-flash" aria-hidden="true"></div>

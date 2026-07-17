@@ -108,15 +108,17 @@ export class Player {
 
     this.strideTime += delta * 13;
     const laneLean = THREE.MathUtils.clamp((LANES[this.targetLane] - this.position.x) * -0.12, -0.25, 0.25);
-    this.bodyRoot.rotation.z = THREE.MathUtils.lerp(this.bodyRoot.rotation.z, laneLean, 1 - Math.exp(-12 * delta));
+    this.bodyRoot.rotation.z = THREE.MathUtils.lerp(this.bodyRoot.rotation.z, laneLean * 0.4, 1 - Math.exp(-12 * delta));
     if (this.state === 'rolling') {
-      this.bodyRoot.rotation.x = THREE.MathUtils.lerp(this.bodyRoot.rotation.x, -1.25, 1 - Math.exp(-18 * delta));
-      this.bodyRoot.position.y = THREE.MathUtils.lerp(this.bodyRoot.position.y, 0.28, 1 - Math.exp(-18 * delta));
+      const progress = THREE.MathUtils.clamp(1 - this.rollRemaining / ROLL_DURATION, 0, 1);
+      this.bodyRoot.rotation.x = 0;
+      this.bodyRoot.position.y = Math.sin(progress * Math.PI) * 0.16 + 0.06;
     } else {
       this.bodyRoot.rotation.x = THREE.MathUtils.lerp(this.bodyRoot.rotation.x, 0, 1 - Math.exp(-14 * delta));
-      this.bodyRoot.position.y = Math.sin(this.strideTime) * 0.035;
+      this.bodyRoot.position.y = THREE.MathUtils.lerp(this.bodyRoot.position.y, 0, 1 - Math.exp(-18 * delta));
     }
-    this.characterAnimation?.update(delta, this.state, 0.7);
+    const rollProgress = this.state === 'rolling' ? 1 - this.rollRemaining / ROLL_DURATION : 0;
+    this.characterAnimation?.update(delta, this.state, 0.7, this.verticalVelocity, laneLean, rollProgress);
   }
 
   reset(): void {
@@ -135,6 +137,23 @@ export class Player {
     this.state = 'crashed';
     this.bodyRoot.rotation.z = -0.78;
     this.bodyRoot.rotation.x = -0.38;
+  }
+
+  setPoseForTest(state: 'jumping' | 'rolling'): void {
+    this.state = state;
+    this.bodyRoot.position.set(0, state === 'rolling' ? 0.22 : 0, 0);
+    this.bodyRoot.rotation.set(0, 0, 0);
+    if (state === 'jumping') {
+      this.position.y = 1.85;
+      this.verticalVelocity = 0;
+      this.rollRemaining = 0;
+      this.characterAnimation?.update(1 / 60, state, 0.7, 0, 0, 0);
+    } else {
+      this.position.y = 0;
+      this.verticalVelocity = 0;
+      this.rollRemaining = ROLL_DURATION * 0.5;
+      this.characterAnimation?.update(1 / 60, state, 0.7, 0, 0, 0.5);
+    }
   }
 
   get colliderMinY(): number {

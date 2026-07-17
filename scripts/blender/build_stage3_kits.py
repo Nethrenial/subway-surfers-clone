@@ -181,10 +181,14 @@ def build_world():
     arch = empty("TransitArchRoot", collection)
     roots.append(arch)
     for x in (-4.15, 4.15):
-        cube(f"ArchPylon_{x}", (x, 0, 2.5), (0.42, 0.62, 5), "NR_Indigo", arch, collection, 0.12)
-        cube(f"ArchLight_{x}", (x, -0.34, 2.7), (0.12, 0.04, 3.4), "NR_Cyan", arch, collection, 0.025)
-    cube("ArchBeam", (0, 0, 5), (8.7, 0.7, 0.48), "NR_Ceramic", arch, collection, 0.16)
-    cube("ArchSignal", (0, -0.38, 4.97), (3.3, 0.04, 0.13), "NR_Coral", arch, collection, 0.025)
+        cube(f"ArchPylon_{x}", (x, 0, 2.9), (0.42, 0.62, 5.8), "NR_Indigo", arch, collection, 0.12)
+        cube(f"ArchLight_{x}", (x, -0.34, 3.15), (0.12, 0.04, 4.15), "NR_Cyan", arch, collection, 0.025)
+    cube("ArchBeamLower", (0, 0, 5.62), (8.7, 0.42, 0.18), "NR_Ceramic", arch, collection, 0.08)
+    cube("ArchBeamUpper", (0, 0, 6.08), (8.7, 0.42, 0.18), "NR_Ceramic", arch, collection, 0.08)
+    cube("ArchSignal", (0, -0.38, 5.6), (3.3, 0.04, 0.1), "NR_Coral", arch, collection, 0.025)
+    for index, x in enumerate((-3, -1.5, 0, 1.5, 3)):
+        rotation = 0.45 if index % 2 == 0 else -0.45
+        cube(f"ArchBrace_{index}", (x, 0, 5.85), (0.12, 0.32, 0.62), "NR_Indigo", arch, collection, 0.03, (0, 0, rotation))
 
     pylon = empty("RoutePylonRoot", collection)
     roots.append(pylon)
@@ -225,6 +229,16 @@ def build_world():
         cube(f"BuildingAWindow_{z}", (0, -1.74, z), (4.45, 0.04, 0.36), "NR_Cyan", building_a, collection, 0.03)
     for x in (-1.6, 0, 1.6):
         cube(f"BuildingARoofFin_{x}", (x, 0.2, 8.4), (0.18, 1.4, 1.2), "NR_Coral", building_a, collection, 0.06)
+    for side, x in (("L", -2.42), ("R", 2.42)):
+        cube(f"WorldDetail_A_Rib_{side}", (x, -1.78, 3.7), (0.22, 0.16, 6.1), "NR_Ceramic", building_a, collection, 0.035)
+        cube(f"WorldDetail_A_Signal_{side}", (x, -1.88, 4.2), (0.07, 0.035, 4.8), "NR_Cyan", building_a, collection, 0.015)
+    for index, z in enumerate((1.75, 3.65, 5.55)):
+        cube(f"WorldDetail_A_Terrace_{index}", (0, -1.82, z), (5.55, 0.72, 0.14), "NR_DarkMetal", building_a, collection, 0.05)
+        cube(f"WorldDetail_A_TerraceTrim_{index}", (0, -2.2, z + 0.06), (4.6, 0.04, 0.08), "NR_Coral", building_a, collection, 0.02)
+    cube("WorldDetail_A_RoofPod", (0, 0, 8.25), (2.1, 1.55, 0.55), "NR_Indigo", building_a, collection, 0.14)
+    cylinder("WorldDetail_A_Mast", (0, 0, 9.45), 0.09, 2.1, "NR_DarkMetal", building_a, collection, vertices=16)
+    torus("WorldDetail_A_CrownRing", (0, 0, 9.55), 0.48, 0.055, "NR_Gold", building_a, collection, (math.pi / 2, 0, 0))
+    cube("WorldDetail_A_Beacon", (0, -0.02, 10.45), (0.18, 0.18, 0.32), "NR_Cyan", building_a, collection, 0.05)
 
     building_b = empty("BuildingBRoot", collection)
     roots.append(building_b)
@@ -234,6 +248,17 @@ def build_world():
         cube(f"BuildingBWindowL_{z}", (-0.72, -1.54, z), (0.92, 0.04, 0.33), "NR_Cyan", building_b, collection, 0.025)
         cube(f"BuildingBWindowR_{z}", (0.45, -1.54, z), (0.62, 0.04, 0.33), "NR_Coral", building_b, collection, 0.025)
     cube("BuildingBCrown", (0, 0, 10), (2.4, 2.2, 0.72), "NR_Gold", building_b, collection, 0.18)
+    for index, z in enumerate((2.1, 4.7, 7.3)):
+        cube(f"WorldDetail_B_Cantilever_{index}", (-1.9, -0.35, z), (1.35, 2.15, 0.28), "NR_Ceramic", building_b, collection, 0.1)
+        cube(f"WorldDetail_B_CantileverTrim_{index}", (-2.58, -0.65, z + 0.08), (0.08, 1.3, 0.18), "NR_Coral", building_b, collection, 0.025)
+    for side, x in (("L", -1.62), ("R", 1.62)):
+        cube(f"WorldDetail_B_Rib_{side}", (x, -1.57, 5), (0.15, 0.14, 8.1), "NR_DarkMetal", building_b, collection, 0.025)
+        cube(f"WorldDetail_B_Signal_{side}", (x, -1.66, 5.2), (0.055, 0.025, 6.9), "NR_Cyan", building_b, collection, 0.012)
+    cube("WorldDetail_B_RoofBridge", (0, 0, 10.65), (3.05, 1.45, 0.24), "NR_DarkMetal", building_b, collection, 0.08)
+    for x in (-1.15, 0, 1.15):
+        cylinder(f"WorldDetail_B_Antenna_{x}", (x, 0, 11.55), 0.055, 1.7, "NR_DarkMetal", building_b, collection, vertices=14)
+    torus("WorldDetail_B_CrownHalo", (0, 0, 11.9), 0.7, 0.06, "NR_Coral", building_b, collection, (math.pi / 2, 0, 0))
+    cube("WorldDetail_B_Beacon", (0, -0.02, 12), (0.22, 0.18, 0.22), "NR_Gold", building_b, collection, 0.06)
 
     export_roots(roots, "world-kit")
     return roots

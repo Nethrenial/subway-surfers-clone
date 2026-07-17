@@ -7,29 +7,33 @@ import { Loop } from '../core/Loop';
 import { createRenderer, resizeRenderer } from '../core/Renderer';
 import { Player } from '../entities/Player';
 import { CameraRig } from '../systems/CameraRig';
+import { AudioManager, type AudioGroup } from '../systems/AudioManager';
 import { CollectibleSystem } from '../systems/CollectibleSystem';
 import { CollisionSystem } from '../systems/CollisionSystem';
 import { EffectsManager } from '../systems/EffectsManager';
 import { Hud } from '../systems/Hud';
 import { PowerUpSystem, type PowerUpType } from '../systems/PowerUpSystem';
+import { RenderPipeline } from '../systems/RenderPipeline';
 import { ScoreSystem } from '../systems/ScoreSystem';
 import { TrackManager } from '../systems/TrackManager';
 import { WorldArtDirector } from '../systems/WorldArtDirector';
 import { createSeededRandom } from '../utils/random';
 
-type GameState = 'running' | 'paused' | 'game-over';
+type GameState = 'ready' | 'running' | 'paused' | 'game-over';
 
 const BASE_SPEED = 10.8;
 const MAX_SPEED = 18.5;
 
 export class Game {
   private readonly renderer: THREE.WebGLRenderer;
+  private readonly renderPipeline: RenderPipeline;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(55, 9 / 16, 0.1, 150);
   private readonly input: InputController;
   private readonly player = new Player();
   private readonly collision = new CollisionSystem();
   private readonly cameraRig = new CameraRig(this.camera);
+  private readonly audio = new AudioManager();
   private readonly scoreSystem = new ScoreSystem();
   private readonly effects = new EffectsManager();
   private readonly materials = new MaterialLibrary();
@@ -45,7 +49,7 @@ export class Game {
   private environmentTexture: THREE.Texture | null = null;
   private seedValue = 7;
   private rng = createSeededRandom(this.seedValue);
-  private state: GameState = 'running';
+  private state: GameState = 'ready';
   private frame = 0;
   private elapsed = 0;
   private speed = BASE_SPEED;
@@ -56,18 +60,26 @@ export class Game {
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = createRenderer(canvas);
     this.renderer.setClearColor('#091426');
-    this.renderer.toneMappingExposure = 1.1;
+    this.renderer.toneMappingExposure = 0.98;
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.environmentTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     this.scene.environment = this.environmentTexture;
-    this.scene.environmentIntensity = 0.9;
+    this.scene.environmentIntensity = 0.55;
     pmrem.dispose();
+    this.renderPipeline = new RenderPipeline(this.renderer, this.scene, this.camera);
     this.input = new InputController(canvas);
-    this.hud = new Hud(
-      () => this.pause(),
-      () => this.resume(),
-      () => this.resetRun(),
-    );
+    this.hud = new Hud({
+      onStart: () => this.beginRun(),
+      onPause: () => this.pause(),
+      onResume: () => this.resume(),
+      onRestart: () => this.resetRun(),
+      onSettings: (open) => {
+        this.hud.setSettingsVisible(open);
+        this.audio.play('confirm');
+      },
+      onVolume: (group, value) => this.setAudioVolume(group, value),
+    });
+    this.hud.setMainMenuVisible(true);
     this.track = new TrackManager(this.rng);
     this.collectibles = new CollectibleSystem(this.rng);
     this.powerUps = new PowerUpSystem(this.rng);
@@ -82,11 +94,11 @@ export class Game {
       await this.assets.loadAll(onProgress);
       this.player.setVisual(this.assets.cloneHero());
       this.track.setObstacleTemplates({
-        barrier: this.assets.cloneMerged('barrier', 'BarrierRoot'),
-        hurdle: this.assets.cloneMerged('hurdle', 'HurdleRoot'),
-        gate: this.assets.cloneMerged('gate', 'GateRoot'),
-        drone: this.assets.cloneMerged('drone', 'DroneRoot'),
-        train: this.assets.cloneMerged('train', 'TrainRoot'),
+        barrier: this.assets.cloneArticulated('barrier', 'BarrierRoot', ['BarrierBeacon_', 'BarrierShock_']),
+        hurdle: this.assets.cloneArticulated('hurdle', 'HurdleRoot', ['HurdleBlade', 'HurdleLamp_']),
+        gate: this.assets.cloneArticulated('gate', 'GateRoot', ['GateTooth_', 'GateScanner']),
+        drone: this.assets.cloneArticulated('drone', 'DroneRoot', ['DroneBlade_', 'DroneRotor_', 'DroneRotorLight_']),
+        train: this.assets.cloneArticulated('train', 'TrainRoot', ['TrainDetail_Wheel_', 'TrainHeadlamp_', 'TrainRouteLight']),
       });
       this.collectibles.setGeometries(
         this.assets.combinedGeometry('rewards', 'RelayTokenRoot'),
@@ -98,8 +110,14 @@ export class Game {
         multiplier: this.assets.cloneMerged('rewards', 'PowerMultiplierRoot'),
         'jump-boost': this.assets.cloneMerged('rewards', 'PowerJumpRoot'),
       });
+      const arch = this.assets.cloneMerged('world', 'TransitArchRoot');
+      arch.traverse((object) => {
+        if (object instanceof THREE.Mesh && object.material.name === 'NR_Ceramic') {
+          object.material = this.materials.get('NR_Indigo');
+        }
+      });
       this.worldArt = new WorldArtDirector({
-        arch: this.assets.cloneMerged('world', 'TransitArchRoot'),
+        arch,
         pylon: this.assets.cloneMerged('world', 'RoutePylonRoot'),
         lamp: this.assets.cloneMerged('world', 'StreetLampRoot'),
         billboard: this.assets.cloneMerged('world', 'BillboardRoot'),
@@ -130,11 +148,13 @@ export class Game {
     this.collectibles.dispose();
     this.powerUps.dispose();
     this.effects.dispose();
+    this.audio.dispose();
     this.worldArt?.dispose();
     this.assets.dispose();
     this.materials.dispose();
     this.environmentTexture?.dispose();
     this.player.dispose();
+    this.renderPipeline.dispose();
     this.renderer.dispose();
     window.__THREE_GAME_DIAGNOSTICS__ = undefined;
     window.__THREE_GAME_TEST_HOOKS__ = undefined;
@@ -143,6 +163,7 @@ export class Game {
   private update(delta: number, _elapsed: number): void {
     this.frame += 1;
     resizeRenderer(this.renderer, this.camera, 1.75);
+    this.renderPipeline.resize();
     const input = this.input.consume();
 
     if (input.pause) {
@@ -160,6 +181,9 @@ export class Game {
     if (this.tutorialTime > 4 || input.left || input.right || input.jump || input.roll) this.hud.hideTutorial();
 
     this.speed = Math.min(MAX_SPEED, BASE_SPEED + this.elapsed * 0.075);
+    if (input.left || input.right) this.audio.play('lane');
+    if (input.jump) this.audio.play('jump');
+    if (input.roll) this.audio.play('roll');
     this.player.jumpMultiplier = this.powerUps.jumpMultiplier;
     this.player.update(delta, input);
     this.track.update(delta, this.elapsed, this.speed);
@@ -169,6 +193,7 @@ export class Game {
       this.effects.burst(this.player.position.x, this.player.position.y + 1, this.player.position.z);
       this.cameraRig.addTrauma(0.16);
       this.hud.flashPowerUp();
+      this.audio.play('power');
     }
     const collection = this.collectibles.update(delta, this.speed, this.player, this.powerUps.magnetActive);
     if (collection.count > 0) {
@@ -176,6 +201,7 @@ export class Game {
       this.effects.burst(collection.x, collection.y, collection.z);
       this.cameraRig.addTrauma(0.08);
       this.hud.flashCollect();
+      this.audio.play(collection.value >= 5 ? 'rare' : 'coin');
     }
     const hit = this.collision.findPlayerHit(this.player, this.track.obstacles);
     if (hit) {
@@ -184,13 +210,15 @@ export class Game {
         this.cameraRig.addTrauma(0.42);
         this.effects.burst(this.player.position.x, this.player.position.y + 1, this.player.position.z);
         this.hud.flashShield();
+        this.audio.play('shield');
       } else {
         this.endRun();
       }
     }
 
     this.scoreSystem.update(delta, this.speed, this.powerUps.scoreMultiplier);
-    this.effects.update(delta);
+    this.effects.update(delta, this.speed, this.player, this.powerUps.remaining.shield > 0);
+    this.audio.setRunIntensity((this.speed - BASE_SPEED) / (MAX_SPEED - BASE_SPEED));
     this.cameraRig.update(delta, this.player.position.x, this.reducedMotion);
     this.hud.update(
       this.scoreSystem.score,
@@ -204,16 +232,16 @@ export class Game {
   }
 
   private render(): void {
-    this.renderer.render(this.scene, this.camera);
+    this.renderPipeline.render(this.scene, this.camera);
   }
 
   private createScene(): void {
     this.scene.background = new THREE.Color('#091426');
     this.scene.fog = new THREE.FogExp2('#091426', 0.026);
 
-    const hemisphere = new THREE.HemisphereLight('#aeefff', '#07111e', 2.1);
+    const hemisphere = new THREE.HemisphereLight('#8bd7f0', '#07111e', 1.15);
     this.scene.add(hemisphere);
-    const key = new THREE.DirectionalLight('#d7f7ff', 3.4);
+    const key = new THREE.DirectionalLight('#d4eeff', 2.05);
     key.position.set(-4, 9, 7);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
@@ -224,7 +252,7 @@ export class Game {
     key.shadow.camera.near = 1;
     key.shadow.camera.far = 26;
     this.scene.add(key);
-    const rim = new THREE.PointLight('#ff3f90', 24, 18, 2);
+    const rim = new THREE.PointLight('#ff337d', 11, 16, 2);
     rim.position.set(0, 3, 7);
     this.scene.add(rim);
 
@@ -259,12 +287,16 @@ export class Game {
   private pause(): void {
     if (this.state !== 'running') return;
     this.state = 'paused';
+    this.audio.play('pause');
+    this.audio.setPaused(true);
     this.hud.setState('paused', this.scoreSystem.score, this.scoreSystem.distance);
   }
 
   private resume(): void {
     if (this.state !== 'paused') return;
     this.state = 'running';
+    this.audio.play('confirm');
+    this.audio.setPaused(false);
     this.hud.setState('running', this.scoreSystem.score, this.scoreSystem.distance);
   }
 
@@ -273,6 +305,8 @@ export class Game {
     this.player.crash();
     this.cameraRig.addTrauma(0.85);
     this.hud.flashImpact();
+    this.audio.play('crash');
+    this.audio.setPaused(true);
     this.hud.setState('game-over', this.scoreSystem.score, this.scoreSystem.distance);
   }
 
@@ -280,6 +314,9 @@ export class Game {
     this.seedValue = seed;
     this.rng = createSeededRandom(seed);
     this.state = 'running';
+    this.hud.setMainMenuVisible(false);
+    this.hud.setSettingsVisible(false);
+    this.audio.setPaused(false);
     this.elapsed = 0;
     this.speed = BASE_SPEED;
     this.tutorialTime = 0;
@@ -295,18 +332,80 @@ export class Game {
     this.hud.setState('running', 0, 0);
   }
 
+  private beginRun(): void {
+    void this.audio.unlock();
+    this.audio.play('confirm');
+    this.resetRun();
+  }
+
+  private setAudioVolume(group: AudioGroup, value: number): void {
+    this.audio.setVolume(group, value);
+  }
+
+  private refreshPresentationForTest(): void {
+    this.collectibles.update(0, this.speed, this.player, this.powerUps.magnetActive);
+    this.effects.update(0, this.speed, this.player, this.powerUps.remaining.shield > 0);
+    this.cameraRig.update(0, this.player.position.x, true);
+    this.hud.update(
+      this.scoreSystem.score,
+      this.scoreSystem.distance,
+      this.speed,
+      this.scoreSystem.coins,
+      this.powerUps.scoreMultiplier,
+      this.powerUps.remaining,
+    );
+    this.publishDiagnostics();
+  }
+
   private installTestHooks(): void {
     window.__THREE_GAME_TEST_HOOKS__ = {
       seed: (value: number) => {
         this.resetRun(value);
       },
       setState: (name: string) => {
-        if (name === 'active-play') this.resetRun();
-        else if (name === 'game-over') this.endRun();
+        if (name === 'menu') {
+          this.resetRun();
+          this.state = 'ready';
+          this.hud.setMainMenuVisible(true);
+          this.refreshPresentationForTest();
+        }
+        else if (name === 'settings') {
+          this.resetRun();
+          this.state = 'ready';
+          this.hud.setMainMenuVisible(true);
+          this.hud.setSettingsVisible(true);
+          this.refreshPresentationForTest();
+        }
+        else if (name === 'active-play') {
+          this.resetRun();
+          this.refreshPresentationForTest();
+        }
+        else if (name === 'game-over') {
+          this.resetRun();
+          this.endRun();
+          this.refreshPresentationForTest();
+        }
         else if (name === 'paused') this.pause();
         else if (name === 'power-up-test') {
           this.resetRun();
           this.powerUps.spawnForTest('magnet', this.player);
+          this.powerUps.update(0.02, this.speed, this.player);
+          this.refreshPresentationForTest();
+        }
+        else if (name === 'shield-test') {
+          this.resetRun();
+          this.powerUps.activate('shield');
+          this.refreshPresentationForTest();
+        }
+        else if (name === 'hazard-showcase') {
+          this.resetRun();
+          this.track.setShowcaseForTest();
+          this.refreshPresentationForTest();
+        }
+        else if (name === 'jump-test' || name === 'roll-test') {
+          this.resetRun();
+          this.player.setPoseForTest(name === 'jump-test' ? 'jumping' : 'rolling');
+          this.refreshPresentationForTest();
         }
         else console.warn(`Unknown test state: ${name}`);
       },
@@ -346,11 +445,13 @@ export class Game {
         segments: 10,
       },
       assets: { ...this.assets.diagnostics },
+      audio: this.audio.diagnostics,
       renderer: {
         calls: info.render.calls,
         triangles: info.render.triangles,
         geometries: info.memory.geometries,
         textures: info.memory.textures,
+        postPasses: this.renderPipeline.postPasses,
       },
       canvas: {
         clientWidth: this.canvas.clientWidth,

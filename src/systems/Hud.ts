@@ -1,6 +1,16 @@
+import type { AudioGroup } from './AudioManager';
+import type { PowerUpType } from './PowerUpSystem';
+
 export type UiState = 'running' | 'paused' | 'game-over';
 
-import type { PowerUpType } from './PowerUpSystem';
+export interface HudCallbacks {
+  onStart(): void;
+  onPause(): void;
+  onResume(): void;
+  onRestart(): void;
+  onSettings(open: boolean): void;
+  onVolume(group: AudioGroup, value: number): void;
+}
 
 const POWER_DURATIONS: Record<PowerUpType, number> = {
   magnet: 9,
@@ -21,15 +31,45 @@ export class Hud {
   private readonly gameOverOverlay = this.getElement('#game-over-overlay');
   private readonly tutorial = this.getElement('#tutorial');
   private readonly impactFlash = this.getElement('#impact-flash');
+  private readonly hud = this.getElement('#hud');
+  private readonly powerStrip = this.getElement('#power-strip');
+  private readonly mainMenu = this.getElement('#main-menu');
+  private readonly settingsOverlay = this.getElement('#settings-overlay');
   private readonly powerChips = new Map<PowerUpType, HTMLElement>();
 
-  constructor(onPause: () => void, onResume: () => void, onRestart: () => void) {
-    this.getElement('#pause-button').addEventListener('click', onPause);
-    this.getElement('#resume-button').addEventListener('click', onResume);
-    this.getElement('#restart-button').addEventListener('click', onRestart);
+  constructor(callbacks: HudCallbacks) {
+    this.getElement('#start-button').addEventListener('click', callbacks.onStart);
+    this.getElement('#pause-button').addEventListener('click', callbacks.onPause);
+    this.getElement('#resume-button').addEventListener('click', callbacks.onResume);
+    this.getElement('#restart-button').addEventListener('click', callbacks.onRestart);
+    this.getElement('#menu-settings-button').addEventListener('click', () => callbacks.onSettings(true));
+    this.getElement('#pause-settings-button').addEventListener('click', () => callbacks.onSettings(true));
+    this.getElement('#settings-close-button').addEventListener('click', () => callbacks.onSettings(false));
+    for (const group of ['master', 'music', 'sfx'] as AudioGroup[]) {
+      const input = this.getElement(`#${group}-volume`) as HTMLInputElement;
+      const output = this.getElement(`#${group}-output`);
+      input.addEventListener('input', () => {
+        output.textContent = input.value;
+        callbacks.onVolume(group, Number(input.value) / 100);
+      });
+    }
     for (const type of Object.keys(POWER_DURATIONS) as PowerUpType[]) {
       this.powerChips.set(type, this.getElement(`[data-power="${type}"]`));
     }
+  }
+
+  setMainMenuVisible(visible: boolean): void {
+    this.mainMenu.classList.toggle('is-hidden', !visible);
+    this.mainMenu.setAttribute('aria-hidden', String(!visible));
+    this.hud.classList.toggle('is-menu-hidden', visible);
+    this.powerStrip.classList.toggle('is-menu-hidden', visible);
+    this.tutorial.classList.toggle('is-menu-hidden', visible);
+    document.documentElement.classList.toggle('menu-open', visible);
+  }
+
+  setSettingsVisible(visible: boolean): void {
+    this.settingsOverlay.classList.toggle('is-visible', visible);
+    this.settingsOverlay.setAttribute('aria-hidden', String(!visible));
   }
 
   update(

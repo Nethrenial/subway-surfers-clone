@@ -57,6 +57,19 @@ test('renders and completes the runner interaction loop', async ({ page }, testI
   await page.waitForFunction(() => (window.__THREE_GAME_DIAGNOSTICS__?.frame ?? 0) > 10);
   await expect(page.locator('#loading-screen')).toHaveClass(/is-complete/);
   await expect.poll(async () => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.assets.files ?? 0)).toBe(8);
+  await expect(page.locator('#main-menu')).not.toHaveClass(/is-hidden/);
+  await page.locator('#menu-settings-button').click();
+  await expect(page.locator('#settings-overlay')).toHaveClass(/is-visible/);
+  await page.locator('#master-volume').evaluate((element: HTMLInputElement) => {
+    element.value = '70';
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(page.locator('#master-output')).toHaveText('70');
+  await page.locator('#settings-close-button').click();
+  await page.locator('#start-button').click();
+  await expect(page.locator('#main-menu')).toHaveClass(/is-hidden/);
+  await expect.poll(async () => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.audio.unlocked)).toBe(true);
+  await expect.poll(async () => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.audio.master)).toBe(0.7);
 
   const sample = await sampleCanvas(page);
   expect(sample, JSON.stringify(sample)).toMatchObject({ ok: true });

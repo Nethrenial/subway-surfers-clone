@@ -17,20 +17,7 @@ class TrackSegment {
   constructor(
     index: number,
     obstacleResources: ObstacleResources,
-    deckGeometry: THREE.BufferGeometry,
-    markingGeometry: THREE.BufferGeometry,
-    trackMaterial: THREE.Material,
-    laneMaterial: THREE.Material,
   ) {
-    const deck = new THREE.Mesh(deckGeometry, trackMaterial);
-    deck.position.y = -0.18;
-    deck.receiveShadow = true;
-    this.group.add(deck);
-
-    const markings = new THREE.Mesh(markingGeometry, laneMaterial);
-    markings.receiveShadow = true;
-    this.group.add(markings);
-
     for (let i = 0; i < 4; i += 1) {
       const obstacle = new Obstacle(obstacleResources);
       this.obstacles.push(obstacle);
@@ -56,10 +43,21 @@ export class TrackManager {
   private readonly segments: TrackSegment[] = [];
   private readonly geometries: THREE.BufferGeometry[] = [];
   private readonly materials: THREE.Material[] = [];
+  private readonly textures: THREE.Texture[] = [];
+  private readonly deckInstances: THREE.InstancedMesh;
+  private readonly markingInstances: THREE.InstancedMesh;
+  private readonly instanceMatrix = new THREE.Matrix4();
   private generation = 0;
 
   constructor(private rng: SeededRandom) {
-    const trackMaterial = new THREE.MeshStandardMaterial({ color: '#10243a', roughness: 0.72, metalness: 0.18 });
+    const trackTexture = createTrackTexture();
+    this.textures.push(trackTexture);
+    const trackMaterial = new THREE.MeshStandardMaterial({
+      color: '#456684',
+      map: trackTexture,
+      roughness: 0.72,
+      metalness: 0.18,
+    });
     const laneMaterial = new THREE.MeshStandardMaterial({
       color: '#5ee8ff',
       emissive: '#087f9b',
@@ -78,16 +76,19 @@ export class TrackManager {
     for (const part of markingParts) part.dispose();
     if (!markingGeometry) throw new Error('Could not merge track marking geometry.');
     this.geometries.push(deckGeometry, markingGeometry);
+    this.deckInstances = new THREE.InstancedMesh(deckGeometry, trackMaterial, SEGMENT_COUNT);
+    this.deckInstances.receiveShadow = true;
+    this.deckInstances.frustumCulled = false;
+    this.markingInstances = new THREE.InstancedMesh(markingGeometry, laneMaterial, SEGMENT_COUNT);
+    this.markingInstances.receiveShadow = true;
+    this.markingInstances.frustumCulled = false;
+    this.group.add(this.deckInstances, this.markingInstances);
     const obstacleResources = this.createObstacleResources();
 
     for (let i = 0; i < SEGMENT_COUNT; i += 1) {
       const segment = new TrackSegment(
         i,
         obstacleResources,
-        deckGeometry,
-        markingGeometry,
-        trackMaterial,
-        laneMaterial,
       );
       this.segments.push(segment);
       this.obstacles.push(...segment.obstacles);
@@ -105,9 +106,9 @@ export class TrackManager {
       for (const obstacle of segment.obstacles) {
         obstacle.previousWorldZ = obstacle.worldZ();
         if (obstacle.active) {
-          obstacle.updateMotion(elapsed);
+          obstacle.updateMotion(delta, elapsed, speed);
           const worldZ = obstacle.worldZ();
-          obstacle.group.visible = worldZ > -52 && worldZ < 16;
+          obstacle.group.visible = worldZ > -64 && worldZ < 16;
         }
       }
       segment.group.position.z += speed * delta;
@@ -119,6 +120,7 @@ export class TrackManager {
         for (const obstacle of segment.obstacles) obstacle.previousWorldZ = obstacle.worldZ();
       }
     }
+    this.syncTrackInstances();
   }
 
   reset(rng: SeededRandom): void {
@@ -131,7 +133,12 @@ export class TrackManager {
       segment.configure(createSegmentPattern(this.generation, this.rng));
       this.generation += 1;
       for (const obstacle of segment.obstacles) obstacle.previousWorldZ = obstacle.worldZ();
+      for (const obstacle of segment.obstacles) {
+        const worldZ = obstacle.worldZ();
+        obstacle.group.visible = obstacle.active && worldZ > -64 && worldZ < 16;
+      }
     }
+    this.syncTrackInstances();
   }
 
   setObstacleTemplates(templates: ObstacleTemplates): void {
@@ -142,9 +149,27 @@ export class TrackManager {
     }
   }
 
+  setShowcaseForTest(): void {
+    for (const obstacle of this.obstacles) obstacle.disable();
+    const showcase = [
+      { type: 'train', lane: 1, worldZ: -31 },
+      { type: 'drone', lane: 0, worldZ: -19 },
+      { type: 'gate', lane: 2, worldZ: -25 },
+      { type: 'hurdle', lane: 1, worldZ: -12 },
+    ] as const;
+    for (let index = 0; index < showcase.length; index += 1) {
+      const obstacle = this.obstacles[index];
+      const item = showcase[index];
+      const segmentZ = obstacle.group.parent?.position.z ?? 0;
+      obstacle.configure(item.type, item.lane, item.worldZ - segmentZ, item.type === 'drone' ? 1.1 : 0);
+      obstacle.previousWorldZ = obstacle.worldZ();
+    }
+  }
+
   dispose(): void {
     for (const geometry of this.geometries) geometry.dispose();
     for (const material of this.materials) material.dispose();
+    for (const texture of this.textures) texture.dispose();
   }
 
   private createObstacleResources(): ObstacleResources {
@@ -203,10 +228,73 @@ export class TrackManager {
     train.add(mesh(new THREE.BoxGeometry(1.42, 0.18, 0.16), signal, 0, 0.62, 2.62));
     return { barrier, hurdle, gate, drone, train };
   }
+
+  private syncTrackInstances(): void {
+    for (let index = 0; index < this.segments.length; index += 1) {
+      const z = this.segments[index].group.position.z;
+      this.instanceMatrix.makeTranslation(0, -0.18, z);
+      this.deckInstances.setMatrixAt(index, this.instanceMatrix);
+      this.instanceMatrix.makeTranslation(0, 0, z);
+      this.markingInstances.setMatrixAt(index, this.instanceMatrix);
+    }
+    this.deckInstances.instanceMatrix.needsUpdate = true;
+    this.markingInstances.instanceMatrix.needsUpdate = true;
+  }
 }
 
 function translatedBox(width: number, height: number, depth: number, x: number, y: number, z: number): THREE.BufferGeometry {
   const geometry = new THREE.BoxGeometry(width, height, depth);
   geometry.translate(x, y, z);
   return geometry;
+}
+
+function createTrackTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 512;
+  const context = canvas.getContext('2d')!;
+  const gradient = context.createLinearGradient(0, 0, 256, 0);
+  gradient.addColorStop(0, '#70829a');
+  gradient.addColorStop(0.5, '#a6b3c1');
+  gradient.addColorStop(1, '#70829a');
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 256, 512);
+
+  context.strokeStyle = '#3c4b61';
+  context.lineWidth = 3;
+  for (const y of [2, 128, 256, 384, 510]) {
+    context.beginPath();
+    context.moveTo(0, y);
+    context.lineTo(256, y);
+    context.stroke();
+  }
+  context.fillStyle = '#5c6d84';
+  for (const x of [18, 95, 172]) {
+    for (const y of [34, 162, 290, 418]) {
+      context.fillRect(x, y, 66, 44);
+      context.fillStyle = '#bac5d0';
+      context.fillRect(x + 5, y + 5, 56, 3);
+      context.fillStyle = '#5c6d84';
+    }
+  }
+  context.fillStyle = '#d1a63b';
+  for (let x = -20; x < 276; x += 30) {
+    context.save();
+    context.translate(x, 250);
+    context.rotate(-0.55);
+    context.fillRect(0, 0, 13, 36);
+    context.restore();
+  }
+  context.fillStyle = '#4a596e';
+  for (let index = 0; index < 48; index += 1) {
+    const x = (index * 73 + 19) % 256;
+    const y = (index * 137 + 41) % 512;
+    context.fillRect(x, y, 2 + index % 3, 1);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = 8;
+  return texture;
 }

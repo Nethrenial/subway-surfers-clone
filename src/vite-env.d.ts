@@ -6,7 +6,7 @@ interface ThreeGameDiagnostics {
   score: number;
   distance: number;
   speed: number;
-  state: 'running' | 'paused' | 'game-over';
+  state: 'ready' | 'running' | 'paused' | 'game-over';
   coins: number;
   multiplier: number;
   powerUps: Record<'magnet' | 'shield' | 'multiplier' | 'jump-boost', number>;
@@ -18,11 +18,13 @@ interface ThreeGameDiagnostics {
   };
   entities: { obstacles: number; collectibles: number; segments: number };
   assets: { files: number; meshes: number; triangles: number; materials: number };
+  audio: { unlocked: boolean; state: string; master: number; music: number; sfx: number };
   renderer: {
     calls: number;
     triangles: number;
     geometries: number;
     textures: number;
+    postPasses: number;
   };
   canvas: {
     clientWidth: number;

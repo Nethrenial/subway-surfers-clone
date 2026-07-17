@@ -30,7 +30,7 @@ export class AssetManager {
   private readonly assets = new Map<AssetId, GLTF>();
   private readonly mergedTemplates = new Map<string, THREE.Group>();
   private readonly ownedGeometries: THREE.BufferGeometry[] = [];
-  private optimizedHero: THREE.Group | null = null;
+  private articulatedHero: THREE.Object3D | null = null;
 
   constructor(private readonly materials: MaterialLibrary) {}
 
@@ -48,8 +48,8 @@ export class AssetManager {
   }
 
   cloneHero(): THREE.Object3D {
-    this.optimizedHero ??= this.createOptimizedHero();
-    const clone = this.optimizedHero.clone(true);
+    this.articulatedHero ??= this.createArticulatedHero();
+    const clone = this.articulatedHero.clone(true);
     clone.traverse((object) => {
       if (object instanceof THREE.Mesh) {
         object.castShadow = true;
@@ -64,6 +64,17 @@ export class AssetManager {
     let template = this.mergedTemplates.get(key);
     if (!template) {
       template = this.mergeByMaterial(this.requireRoot(id, rootName));
+      this.mergedTemplates.set(key, template);
+    }
+    return template.clone(true);
+  }
+
+  cloneArticulated(id: AssetId, rootName: string, movingPrefixes: readonly string[]): THREE.Group {
+    const key = `${id}:${rootName}:articulated:${movingPrefixes.join(',')}`;
+    let template = this.mergedTemplates.get(key);
+    if (!template) {
+      template = this.requireRoot(id, rootName).clone(true) as THREE.Group;
+      this.mergeDirectMeshes(template, movingPrefixes);
       this.mergedTemplates.set(key, template);
     }
     return template.clone(true);
@@ -139,50 +150,42 @@ export class AssetManager {
     return mergedRoot;
   }
 
-  private createOptimizedHero(): THREE.Group {
-    const source = this.requireRoot('courier', 'CourierRoot');
-    source.updateWorldMatrix(true, true);
-    const inverse = source.matrixWorld.clone().invert();
-    const animatedNames = new Set([
-      'UpperArm_L', 'UpperArm_R', 'ForearmGuard_L', 'ForearmGuard_R',
-      'Thigh_L', 'Thigh_R', 'Shin_L', 'Shin_R', 'Helmet', 'RelayPack',
-    ]);
-    const staticGroups = new Map<THREE.Material, THREE.BufferGeometry[]>();
-    const root = new THREE.Group();
-    root.name = 'CourierRoot';
-
-    source.traverse((object) => {
-      if (!(object instanceof THREE.Mesh)) return;
-      const relative = inverse.clone().multiply(object.matrixWorld);
-      if (animatedNames.has(object.name)) {
-        const clone = new THREE.Mesh(object.geometry, object.material);
-        clone.name = object.name;
-        relative.decompose(clone.position, clone.quaternion, clone.scale);
-        clone.castShadow = true;
-        clone.receiveShadow = true;
-        root.add(clone);
-        return;
-      }
-      const material = Array.isArray(object.material) ? object.material[0] : object.material;
-      const geometry = object.geometry.clone();
-      geometry.applyMatrix4(relative);
-      const list = staticGroups.get(material) ?? [];
-      list.push(geometry);
-      staticGroups.set(material, list);
-    });
-
-    for (const [material, geometries] of staticGroups) {
-      const geometry = mergeGeometries(geometries, false);
-      for (const sourceGeometry of geometries) sourceGeometry.dispose();
-      if (!geometry) continue;
-      this.ownedGeometries.push(geometry);
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.name = `CourierStatic_${material.name}`;
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      root.add(mesh);
-    }
+  private createArticulatedHero(): THREE.Object3D {
+    const root = this.requireRoot('courier', 'CourierRoot').clone(true);
+    this.mergeDirectMeshes(root, []);
     return root;
+  }
+
+  private mergeDirectMeshes(root: THREE.Object3D, movingPrefixes: readonly string[]): void {
+    root.traverse((node) => {
+      const meshes = node.children.filter((child): child is THREE.Mesh => (
+        child instanceof THREE.Mesh && !movingPrefixes.some((prefix) => child.name.startsWith(prefix))
+      ));
+      const groups = new Map<THREE.Material, THREE.Mesh[]>();
+      for (const mesh of meshes) {
+        const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+        const list = groups.get(material) ?? [];
+        list.push(mesh);
+        groups.set(material, list);
+      }
+      for (const [material, sourceMeshes] of groups) {
+        if (sourceMeshes.length < 2) continue;
+        const geometries = sourceMeshes.map((mesh) => {
+          mesh.updateMatrix();
+          const geometry = mesh.geometry.clone();
+          geometry.applyMatrix4(mesh.matrix);
+          return geometry;
+        });
+        const geometry = mergeGeometries(geometries, false);
+        for (const source of geometries) source.dispose();
+        if (!geometry) continue;
+        this.ownedGeometries.push(geometry);
+        for (const mesh of sourceMeshes) node.remove(mesh);
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.name = `${node.name}_${material.name}`;
+        node.add(mesh);
+      }
+    });
   }
 
   private computeDiagnostics(): void {

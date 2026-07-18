@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { ObjectPool, type Poolable } from '../core/ObjectPool';
 import type { Player } from '../entities/Player';
+import type { Obstacle } from '../entities/Obstacle';
 import type { SeededRandom } from '../utils/random';
+import { findClearLane, type ProtectedRouteItem } from './RouteSafety';
 
 export type PowerUpType = 'magnet' | 'shield' | 'multiplier' | 'jump-boost';
 
@@ -19,14 +21,23 @@ const COLORS: Record<PowerUpType, string> = {
   'jump-boost': '#9dff67',
 };
 
-class PowerUpPickup implements Poolable {
+class PowerUpPickup implements Poolable, ProtectedRouteItem {
   readonly group = new THREE.Group();
   active = false;
   type: PowerUpType = 'magnet';
   previousZ = 0;
+  readonly routeHalfDepth = 0.45;
 
   private readonly profiles = new Map<PowerUpType, THREE.Object3D>();
   private readonly ownedMaterials: THREE.Material[] = [];
+
+  get x(): number {
+    return this.group.position.x;
+  }
+
+  get z(): number {
+    return this.group.position.z;
+  }
 
   constructor(geometry: THREE.BufferGeometry) {
     for (const type of TYPES) {
@@ -91,16 +102,22 @@ export class PowerUpSystem {
   private spawnCursorZ = -34;
   private nextType = 0;
 
+  get routeItems(): readonly ProtectedRouteItem[] {
+    return this.pool.items;
+  }
+
   constructor(rng: SeededRandom) {
     this.rng = rng;
     for (const pickup of this.pool.items) this.group.add(pickup.group);
   }
 
-  update(delta: number, speed: number, player: Player): PowerUpType | null {
+  update(delta: number, speed: number, player: Player, obstacles: readonly Obstacle[] = []): PowerUpType | null {
     for (const type of TYPES) this.remaining[type] = Math.max(0, this.remaining[type] - delta);
     this.spawnCursorZ += speed * delta;
     if (this.spawnCursorZ > -38) {
-      this.spawnPickup(TYPES[this.nextType % TYPES.length], Math.floor(this.rng() * 3), this.spawnCursorZ);
+      const preferredLane = Math.floor(this.rng() * 3);
+      const lane = findClearLane(preferredLane, this.spawnCursorZ, this.spawnCursorZ, obstacles);
+      if (lane !== null) this.spawnPickup(TYPES[this.nextType % TYPES.length], lane, this.spawnCursorZ);
       this.nextType += 1;
       this.spawnCursorZ -= 82 + this.rng() * 20;
     }

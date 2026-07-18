@@ -1,6 +1,8 @@
 import * as THREE from 'three';
+import { PLAYER_JUMP_APEX, PLAYER_ROLL_HEIGHT, PLAYER_STANDING_HEIGHT } from './Player';
 
 export type ObstacleType = 'barrier' | 'hurdle' | 'gate' | 'drone' | 'train';
+export type ObstacleTraversal = 'jump' | 'roll' | 'either' | 'avoid';
 
 export interface ObstacleResources {
   barrier: THREE.Group;
@@ -13,13 +15,20 @@ export interface ObstacleResources {
 export class Obstacle {
   readonly group = new THREE.Group();
   active = false;
+  previousWorldX = 0;
   previousWorldZ = 0;
   type: ObstacleType = 'barrier';
+  traversal: ObstacleTraversal = 'avoid';
+  lane = 1;
+  occupiedLanes: readonly number[] = [1];
   halfWidth = 0.92;
   halfDepth = 0.34;
   minY = 0;
   maxY = 2.35;
+  trainEnterDistance = 0;
+  trainExitDistance = 0;
   private baseX = 0;
+  private trainEntryLocalZ = 0;
   private motionAmplitude = 0;
   private motionPhase = 0;
 
@@ -48,12 +57,22 @@ export class Obstacle {
     this.group.add(model);
   }
 
-  configure(type: ObstacleType, lane: number, localZ: number, motionAmplitude = 0): void {
+  configure(
+    type: ObstacleType,
+    lane: number,
+    localZ: number,
+    motionAmplitude = 0,
+    occupiedLanes: readonly number[] = [lane],
+  ): void {
     this.type = type;
+    this.lane = lane;
+    this.occupiedLanes = occupiedLanes;
     this.active = true;
     this.group.visible = true;
     this.baseX = (lane - 1) * 2.35;
     this.motionAmplitude = motionAmplitude;
+    this.trainEnterDistance = 0;
+    this.trainExitDistance = 0;
     this.motionPhase = lane * 1.7 + localZ * 0.13;
     this.group.position.set(this.baseX, 0, localZ);
     for (const [name, profile] of Object.entries(this.profiles)) {
@@ -61,37 +80,52 @@ export class Obstacle {
       profile.position.set(0, 0, 0);
       profile.rotation.set(0, 0, 0);
       profile.scale.set(1, 1, 1);
+      if (name === 'barrier') profile.scale.y = 1.36;
+      else if (name === 'hurdle') profile.scale.y = 1.18;
     }
 
     if (type === 'hurdle') {
+      this.traversal = 'jump';
       this.halfWidth = 0.92;
       this.halfDepth = 0.32;
       this.minY = 0;
-      this.maxY = 0.88;
+      this.maxY = PLAYER_STANDING_HEIGHT * 0.52;
     } else if (type === 'gate') {
+      this.traversal = 'roll';
       this.halfWidth = 0.98;
       this.halfDepth = 0.34;
-      this.minY = 1.05;
-      this.maxY = 2.45;
+      this.minY = PLAYER_ROLL_HEIGHT + 0.18;
+      this.maxY = PLAYER_STANDING_HEIGHT * 1.28;
     } else if (type === 'drone') {
+      this.traversal = 'either';
       this.halfWidth = 0.72;
       this.halfDepth = 0.72;
-      this.minY = 0.22;
-      this.maxY = 1.72;
+      this.minY = PLAYER_ROLL_HEIGHT + 0.15;
+      this.maxY = PLAYER_JUMP_APEX - 0.16;
     } else if (type === 'train') {
+      this.traversal = 'avoid';
       this.halfWidth = 0.98;
-      this.halfDepth = 2.5;
+      this.halfDepth = 2.7;
       this.minY = 0;
       this.maxY = 3.1;
     } else {
+      this.traversal = 'avoid';
       this.halfWidth = 0.92;
       this.halfDepth = 0.4;
       this.minY = 0;
-      this.maxY = 2.35;
+      this.maxY = PLAYER_STANDING_HEIGHT * 1.28;
     }
   }
 
-  updateMotion(delta: number, elapsed: number, worldSpeed: number): void {
+  scheduleTrain(currentDistance: number, enterDistance: number, exitDistance: number, entryWorldZ: number): void {
+    const parentZ = this.group.parent?.position.z ?? 0;
+    this.trainEnterDistance = enterDistance;
+    this.trainExitDistance = exitDistance;
+    this.trainEntryLocalZ = entryWorldZ - parentZ - (enterDistance - currentDistance);
+    this.group.position.z = this.trainEntryLocalZ;
+  }
+
+  updateMotion(_delta: number, elapsed: number, _worldSpeed: number, routeDistance = 0): void {
     const profile = this.profiles[this.type];
     const pulse = Math.sin(elapsed * 5.2 + this.motionPhase);
     if (this.motionAmplitude !== 0) {
@@ -99,11 +133,11 @@ export class Obstacle {
       this.group.position.x = this.baseX + this.motionAmplitude * sweep;
     }
     if (this.type === 'train') {
-      this.group.position.z += worldSpeed * 0.72 * delta;
+      this.group.position.z = this.trainEntryLocalZ + Math.max(0, routeDistance - this.trainEnterDistance) * 0.72;
       profile.position.y = Math.abs(pulse) * 0.025;
       profile.rotation.z = pulse * 0.012;
     } else if (this.type === 'drone') {
-      profile.position.y = 0.12 + pulse * 0.08;
+      profile.position.y = 0.48 + pulse * 0.08;
       profile.rotation.z = -pulse * 0.16;
       profile.rotation.y = Math.sin(elapsed * 2.4 + this.motionPhase) * 0.2;
       this.poseParts(profile, 'DroneBlade_', (part) => {

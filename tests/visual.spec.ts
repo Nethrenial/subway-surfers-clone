@@ -121,8 +121,10 @@ test('renders and completes the runner interaction loop', async ({ page }, testI
 
   await page.evaluate(() => window.__THREE_GAME_TEST_HOOKS__?.setState('game-over'));
   await expect(page.locator('#game-over-overlay')).toHaveClass(/is-visible/);
+  const finishedRunSeed = await page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.seed);
   await page.keyboard.press('Enter');
   await expect.poll(async () => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.state)).toBe('running');
+  await expect.poll(async () => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.seed)).not.toBe(finishedRunSeed);
 
   const screenshot = await page.screenshot({ fullPage: true });
   await testInfo.attach(`${testInfo.project.name}-game`, {
@@ -147,7 +149,7 @@ test('a real seeded hazard collision ends and restarts the run', async ({ page }
   await page.waitForFunction(() => (window.__THREE_GAME_DIAGNOSTICS__?.frame ?? 0) > 10);
   await page.evaluate(() => {
     window.__THREE_GAME_TEST_HOOKS__?.seed(7);
-    window.__THREE_GAME_TEST_HOOKS__?.setState('active-play');
+    window.__THREE_GAME_TEST_HOOKS__?.setState('collision-test');
   });
 
   await expect
@@ -173,7 +175,7 @@ test('collectibles, power-ups, and shield recovery affect a real run', async ({ 
 
   await page.goto('/');
   await page.waitForFunction(() => (window.__THREE_GAME_DIAGNOSTICS__?.frame ?? 0) > 10);
-  await page.evaluate(() => window.__THREE_GAME_TEST_HOOKS__?.setState('active-play'));
+  await page.evaluate(() => window.__THREE_GAME_TEST_HOOKS__?.setState('collectible-test'));
   await expect
     .poll(async () => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.coins ?? 0), { timeout: 3_000 })
     .toBeGreaterThan(0);
@@ -190,7 +192,7 @@ test('collectibles, power-ups, and shield recovery affect a real run', async ({ 
   await expect(page.locator('#multiplier-value')).toHaveText('x2');
 
   await page.evaluate(() => {
-    window.__THREE_GAME_TEST_HOOKS__?.setState('active-play');
+    window.__THREE_GAME_TEST_HOOKS__?.setState('collision-test');
     window.__THREE_GAME_TEST_HOOKS__?.grantPowerUp('shield');
   });
   await expect
@@ -206,4 +208,69 @@ test('collectibles, power-ups, and shield recovery affect a real run', async ({ 
   await expect(page.locator('#game-over-overlay')).not.toHaveClass(/is-visible/);
   expect(consoleErrors).toEqual([]);
   expect(pageErrors).toEqual([]);
+});
+
+test('oncoming trains move continuously after entering the visible corridor', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'Train scheduling is viewport independent.');
+  await page.goto('/');
+  await page.waitForFunction(() => (window.__THREE_GAME_DIAGNOSTICS__?.assets.files ?? 0) === 8);
+  await page.evaluate(() => window.__THREE_GAME_TEST_HOOKS__?.setState('hazard-showcase'));
+
+  await expect.poll(
+    async () => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.entities.visibleTrains ?? 0),
+  ).toBeGreaterThan(0);
+
+  const startZ = await page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.entities.leadTrainZ ?? -Infinity);
+  await page.waitForTimeout(300);
+  const endZ = await page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.entities.leadTrainZ ?? -Infinity);
+  expect(endZ - startZ).toBeGreaterThan(4);
+
+  expect(await page.evaluate(
+    () => window.__THREE_GAME_DIAGNOSTICS__?.entities.trainConflictViolations ?? -1,
+  )).toBe(0);
+  expect(await page.evaluate(
+    () => window.__THREE_GAME_DIAGNOSTICS__?.entities.trainMotionViolations ?? -1,
+  )).toBe(0);
+  expect(await page.evaluate(
+    () => window.__THREE_GAME_DIAGNOSTICS__?.entities.prematureTrainRecycles ?? -1,
+  )).toBe(0);
+});
+
+test('magnet detaches coins individually from their authored trail', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'Magnet simulation is viewport independent.');
+  await page.goto('/');
+  await page.waitForFunction(() => (window.__THREE_GAME_DIAGNOSTICS__?.assets.files ?? 0) === 8);
+  await page.evaluate(() => window.__THREE_GAME_TEST_HOOKS__?.setState('magnet-capture-test'));
+
+  await expect.poll(async () => page.evaluate(
+    () => window.__THREE_GAME_DIAGNOSTICS__?.entities.magnetCapturesStarted ?? 0,
+  )).toBeGreaterThan(0);
+  expect(await page.evaluate(
+    () => window.__THREE_GAME_DIAGNOSTICS__?.entities.maxConcurrentCaptures,
+  )).toBe(1);
+
+  await testInfo.attach('staggered-magnet-capture', {
+    body: await page.screenshot({ fullPage: true }),
+    contentType: 'image/png',
+  });
+});
+
+test('generated routes remain open during a sustained live simulation', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'Route generation is viewport independent.');
+  await page.goto('/');
+  await page.waitForFunction(() => (window.__THREE_GAME_DIAGNOSTICS__?.assets.files ?? 0) === 8);
+  await page.evaluate(() => {
+    window.__THREE_GAME_TEST_HOOKS__?.seed(7);
+    window.__THREE_GAME_TEST_HOOKS__?.setState('active-play');
+    window.__THREE_GAME_TEST_HOOKS__?.setInvulnerable(true);
+    window.__THREE_GAME_TEST_HOOKS__?.setSpeedForTest(18.5);
+  });
+  await page.waitForTimeout(8_000);
+
+  const entities = await page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.entities);
+  expect(entities?.trainsEntered).toBeGreaterThan(0);
+  expect(entities?.routeWallViolations).toBe(0);
+  expect(entities?.trainConflictViolations).toBe(0);
+  expect(entities?.trainMotionViolations).toBe(0);
+  expect(entities?.prematureTrainRecycles).toBe(0);
 });

@@ -6,7 +6,7 @@ Last updated: 2026-07-18
 
 Neon Relay uses a stormline-solarpunk identity: deep indigo transit infrastructure, pale ceramic shells, coral danger surfaces, cyan route signals, and warm gold rewards. Rounded hard-surface forms and geometric relay glyphs connect the character, hazards, world props, pickups, and interface.
 
-The chase camera prioritizes broad silhouettes, high-value rear character detail, readable hazard height, and luminous path cues. Glow supports authored forms rather than replacing them.
+The chase camera remains centered on the track during lane changes and prioritizes broad silhouettes, high-value rear character detail, readable hazard height, and luminous path cues. Lateral energy comes from the courier's authored lane-cut pose rather than camera steering. Glow supports authored forms rather than replacing them.
 
 ## Skill-loading Ledger
 
@@ -40,7 +40,7 @@ Blender provider state at phase entry:
 
 Chosen sources:
 
-- Hero/player: original Blender MCP model, glTF export, 18-joint object hierarchy, and runtime authored poses
+- Hero/player: original Blender MCP humanoid model, glTF export, 18-joint object hierarchy, and runtime authored poses
 - Obstacles and train: original Blender MCP models with named moving subassemblies and separate gameplay collision proxies
 - Rewards and power-ups: original Blender MCP kit; instancing or pooled clones at runtime
 - World and skyline: hybrid Blender authored modules plus instanced/merged Three.js support detail
@@ -56,7 +56,7 @@ External third-party assets generated or downloaded: none. The missing credentia
 
 Hero surfaces:
 
-- Courier helmet/visor, jacket armor, relay pack, limbs, gloves, knee plates, signal shoes, and articulated signal ribbon
+- Courier head, neck, hair, ears, slim glasses, hooded jacket, relay pack, articulated limbs, gloves, knee plates, signal shoes, and signal ribbon
 - Barrier, hurdle, moving-tooth gate, rotor drone, and independently approaching train hazard family
 - Relay token, rare shard, magnet, shield, multiplier, and jump-boost pickups
 - Transit arch and close world modules
@@ -95,7 +95,7 @@ Render budget: desktop `<=300` calls and `<=750k` triangles; mobile hard limit `
 
 | Asset | Runtime path | Size |
 | --- | --- | ---: |
-| Courier | `public/assets/models/neon-courier.glb` | 646 KB |
+| Courier | `public/assets/models/neon-courier.glb` | 711 KB |
 | Barrier | `public/assets/models/barrier-premium.glb` | 128 KB |
 | Hurdle | `public/assets/models/hurdle-premium.glb` | 76 KB |
 | Gate | `public/assets/models/gate-premium.glb` | 140 KB |
@@ -103,7 +103,7 @@ Render budget: desktop `<=300` calls and `<=750k` triangles; mobile hard limit `
 | Train | `public/assets/models/train-premium.glb` | 511 KB |
 | Reward/power kit | `public/assets/models/reward-power-kit.glb` | 378 KB |
 | World kit | `public/assets/models/world-kit.glb` | 1,119 KB |
-| Editable source | `art/blender/neon-relay-stage3.blend` | 455 KB |
+| Editable source | `art/blender/neon-relay-stage3.blend` | 464 KB |
 
 Courier Blender bounds before runtime normalization: `1.246 x 0.825 x 2.241 m`. Runtime scale will preserve the existing collision contract instead of using detailed meshes for collisions.
 
@@ -111,8 +111,8 @@ Runtime integration checkpoint:
 
 - All eight GLBs load through `AssetManager` with fallback handling.
 - Direct children are merged only within the same anatomical pivot and material; the courier retains hips/spine/chest/head, paired arm and leg chains, pack suspension, and three ribbon joints.
-- Trains approach at `1.72x` track-relative speed. Drones hover, bank, and rotate paired blades; gates, hurdles, and warning profiles retain independent motion cues.
-- Six full-detail city modules are merged into two independently recycled 66 m batches. Ten road decks/marking sets render as two instanced submissions.
+- Trains are scheduled while offscreen, reserve their lanes from later hazards and rewards, then approach continuously at `1.72x` track-relative speed from their first visible frame. Drones reserve every lane in their lateral sweep, hover, bank, and rotate paired blades; gates, hurdles, and warning profiles retain independent motion cues.
+- Six full-detail city modules are merged into two independently recycled 66 m batches. Each batch recycles only after its final child module clears the camera. Ten road decks/marking sets render as two instanced submissions.
 - Detailed hero meshes use one capsule shadow proxy rather than repeating every articulated part in the shadow pass.
 - Far hazard visuals enter at 64 m under exponential fog; collision state is never culled and no close-range LOD is used.
 
@@ -120,14 +120,14 @@ Final measured diagnostics:
 
 | Metric | Desktop | Mobile | Budget |
 | --- | ---: | ---: | ---: |
-| Calls | 132 | 118 | 300 / 150 |
-| Triangles | 176,154 | 173,476 | 750k / 300k |
-| Geometries | 89 | 88 | 300 / 200 |
+| Calls | 116 | 102 | 300 / 150 |
+| Triangles | 183,822 | 183,808 | 750k / 300k |
+| Geometries | 91 | 90 | 300 / 200 |
 | Textures | 19 | 6 | 60 / 40 |
 | Post passes | 2 | 0 | 2 / 1 |
-| Smoothed frame time | 8.34 ms | 10.53 ms | <16.67 ms |
+| Smoothed frame time | 8.35 ms | 10.55 ms | <16.67 ms |
 
-The fidelity pass peaked at 249 mobile calls before pivot-safe hazard merging, instanced decks, batched city recyclers, and the hero shadow proxy reduced it to 118. Triangles and visible distance were retained instead of using aggressive LODs.
+The fidelity pass peaked at 249 mobile calls before pivot-safe hazard merging, instanced decks, batched city recyclers, and the hero shadow proxy reduced corrected active play to 102. Triangles and visible distance were retained instead of using aggressive LODs.
 
 ## Audio Matrix
 
@@ -161,9 +161,9 @@ Final independent fresh-eyes result: `23/30` (`2.30/3.00`). Premium gate passed;
 | UI/HUD | 3 |
 | Performance evidence | 2 |
 
-Automatic failures remaining: none. Remaining showcase gaps are broader world/reward variation, stronger event VFX, and denser cinematic composition. The 18-state visual harness covers menu, settings, active play, jump, roll, hazard showcase, shield, pause, and game over on desktop and mobile.
+Automatic failures remaining: none. Remaining showcase gaps are broader world/reward variation, stronger event VFX, and denser cinematic composition. The 20-state visual harness covers menu, settings, active play, lane cut, jump, forward roll, hazard showcase, shield, pause, and game over on desktop and mobile.
 
-Fresh-eyes review: independent reviewer inspected the complete 18-state desktop/mobile set and serial inspector JSON. Average: `2.30/3.00`.
+Fresh-eyes review: independent reviewer inspected the complete desktop/mobile set and serial inspector JSON. Average: `2.30/3.00`.
 
 ## Game Design Brief
 
@@ -171,11 +171,11 @@ Player promise: carry a live stormline signal through a fast, readable three-lan
 
 ## Core Loop
 
-Scan the next pattern and reward trail, choose a lane/jump/roll response, execute it, collect or survive, use a short recovery beat, and repeat at increasing speed. Seeded generation always retains at least one safe lane.
+Scan the next pressure row and reward trail, choose a lane/jump/roll response, execute it, collect or survive, use the authored recovery beat, and repeat at increasing speed. One pressure row per segment preserves a safe corridor; every fifth segment is an empty transition where that corridor can move one adjacent lane. Normal runs vary their seed while QA hooks stay deterministic.
 
 ## Level/Encounter Plan
 
-The opening establishes all three lanes before introducing one blocker, then low hurdles and overhead gates teach vertical responses. Trains and sweeping drones expand later threat silhouettes. Coin lines teach safe routes, raised arcs advertise jump rewards, and row spacing creates recovery beats before speed and multi-row pressure escalate.
+The opening establishes all three lanes before introducing one blocker, then low hurdles and overhead gates teach vertical responses. Trains and sweeping drones expand later threat silhouettes. Coin lines teach safe routes, raised arcs advertise jump rewards, two-lane pressure rows increase density, and explicit empty segments create recovery before the safe corridor changes.
 
 ## Reference Ledger And Phase Ledger
 
@@ -191,9 +191,9 @@ The opening establishes all three lanes before introducing one blocker, then low
 
 ## QA/Release Evidence
 
-- Measured evidence: serial desktop/mobile inspector JSON is stored under `artifacts/stage3-rig-pass/` locally; the current values are recorded in the diagnostics table above.
-- Screenshot evidence: 18 committed baselines under `tests/visual-regression.spec.ts-snapshots/`, plus current desktop/mobile active captures under `artifacts/stage3-rig-pass/`.
-- Canvas and pixel evidence: both active canvases are nonblank. Desktop pixel metrics are 5.90-bit entropy, 0.310 edge density, and 161.1 luminance contrast; mobile metrics are 5.11-bit entropy, 0.317 edge density, and 146.5 contrast.
+- Measured evidence: serial desktop/mobile inspector JSON is stored under `artifacts/correction-pass/` locally; the current values are recorded in the diagnostics table above.
+- Screenshot evidence: 20 committed baselines under `tests/visual-regression.spec.ts-snapshots/`, plus current desktop/mobile active captures under `artifacts/correction-pass/`.
+- Canvas and pixel evidence: both active canvases are nonblank. Desktop pixel metrics are 5.71-bit entropy, 0.311 edge density, and 140.5 luminance contrast; mobile metrics are 5.12-bit entropy, 0.288 edge density, and 128.7 contrast.
 - Console errors: 0. Page errors: 0 on both serial inspector runs.
 - VFX readability: jump trails, roll pose, shield shell, speed streaks, collection bursts, crash flash, and HUD feedback remain outside the next-decision corridor and use event/state-specific colors.
 - QA/release status: Stage 3 premium presentation is verified; this is not a release-ready or showcase claim. Physical-device and bot-soak evidence remain Stage 5 requirements.

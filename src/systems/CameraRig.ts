@@ -14,11 +14,11 @@ export class CameraRig {
     this.trauma = Math.min(1, this.trauma + amount);
   }
 
-  update(delta: number, playerX: number, reducedMotion: boolean): void {
+  update(delta: number, _playerX: number, reducedMotion: boolean): void {
     this.time += delta;
-    this.desired.set(playerX, 5.25, 10.6);
+    this.desired.set(0, 5.45, 13.6);
     this.camera.position.lerp(this.desired, 1 - Math.exp(-14 * delta));
-    this.lookTarget.set(playerX * 0.35, 1.15, -7.5);
+    this.lookTarget.set(0, 1.15, -7.5);
     this.camera.lookAt(this.lookTarget);
 
     this.trauma = Math.max(0, this.trauma - delta * 1.8);
@@ -30,8 +30,8 @@ export class CameraRig {
     }
   }
 
-  snap(playerX: number): void {
-    this.camera.position.set(playerX, 5.25, 10.6);
-    this.camera.lookAt(playerX * 0.35, 1.15, -7.5);
+  snap(_playerX: number): void {
+    this.camera.position.set(0, 5.45, 13.6);
+    this.camera.lookAt(0, 1.15, -7.5);
   }
 }

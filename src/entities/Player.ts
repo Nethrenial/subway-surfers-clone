@@ -4,16 +4,25 @@ import { CharacterAnimationController } from '../systems/CharacterAnimationContr
 
 export type PlayerState = 'running' | 'jumping' | 'rolling' | 'crashed';
 
-const LANES = [-2.35, 0, 2.35] as const;
+export const LANES = [-2.35, 0, 2.35] as const;
 const GRAVITY = 27;
 const JUMP_VELOCITY = 10.4;
 const ROLL_DURATION = 0.68;
+export const LANE_CHANGE_DURATION = 0.34;
+
+export const PLAYER_STANDING_HEIGHT = 1.92;
+export const PLAYER_ROLL_HEIGHT = 0.82;
+export const PLAYER_JUMP_APEX = JUMP_VELOCITY * JUMP_VELOCITY / (2 * GRAVITY);
+export const PLAYER_HALF_DEPTH = 0.38;
 
 export class Player {
   readonly group = new THREE.Group();
   readonly position = this.group.position;
   readonly halfWidth = 0.48;
-  readonly halfDepth = 0.38;
+  readonly halfDepth = PLAYER_HALF_DEPTH;
+  previousX = 0;
+  previousColliderMinY = 0.08;
+  previousColliderMaxY = PLAYER_STANDING_HEIGHT;
   state: PlayerState = 'running';
   lane = 1;
   targetLane = 1;
@@ -46,6 +55,10 @@ export class Player {
   private rollRemaining = 0;
   private queuedJump = false;
   private strideTime = 0;
+  private laneChangeElapsed = LANE_CHANGE_DURATION;
+  private laneChangeDuration = LANE_CHANGE_DURATION;
+  private laneChangeStartX = 0;
+  private laneChangeDirection = 0;
   private characterAnimation: CharacterAnimationController | null = null;
 
   constructor() {
@@ -75,25 +88,42 @@ export class Player {
 
   update(delta: number, input: Readonly<InputFrame>): void {
     if (this.state === 'crashed') return;
+    this.previousX = this.position.x;
+    const previousTargetLane = this.targetLane;
     if (input.left) this.targetLane = Math.max(0, this.targetLane - 1);
     if (input.right) this.targetLane = Math.min(2, this.targetLane + 1);
+    if (this.targetLane !== previousTargetLane) {
+      this.laneChangeDirection = Math.sign(this.targetLane - previousTargetLane);
+      this.laneChangeElapsed = 0;
+      this.laneChangeStartX = this.position.x;
+      this.laneChangeDuration = Math.max(
+        0.08,
+        LANE_CHANGE_DURATION * Math.abs(LANES[this.targetLane] - this.position.x) / 2.35,
+      );
+    }
 
     if (input.jump) {
       if (this.isGrounded()) this.startJump();
       else this.queuedJump = true;
     }
     if (input.roll) this.startRoll();
+    this.previousColliderMinY = this.colliderMinY;
+    this.previousColliderMaxY = this.colliderMaxY;
 
-    const laneSmoothing = 1 - Math.exp(-16 * delta);
-    this.position.x = THREE.MathUtils.lerp(this.position.x, LANES[this.targetLane], laneSmoothing);
-    if (Math.abs(this.position.x - LANES[this.targetLane]) < 0.03) {
+    if (this.laneChangeElapsed < this.laneChangeDuration) {
+      this.laneChangeElapsed = Math.min(this.laneChangeDuration, this.laneChangeElapsed + delta);
+      const progress = this.laneChangeElapsed / this.laneChangeDuration;
+      const eased = progress * progress * (3 - 2 * progress);
+      this.position.x = THREE.MathUtils.lerp(this.laneChangeStartX, LANES[this.targetLane], eased);
+    }
+    if (this.laneChangeElapsed >= this.laneChangeDuration) {
       this.position.x = LANES[this.targetLane];
       this.lane = this.targetLane;
     }
 
     if (!this.isGrounded() || this.verticalVelocity > 0) {
+      this.position.y += this.verticalVelocity * delta - 0.5 * GRAVITY * delta * delta;
       this.verticalVelocity -= GRAVITY * delta;
-      this.position.y += this.verticalVelocity * delta;
       if (this.position.y <= 0) {
         this.position.y = 0;
         this.verticalVelocity = 0;
@@ -112,6 +142,9 @@ export class Player {
     }
 
     this.strideTime += delta * 13;
+    const laneChangeProgress = THREE.MathUtils.clamp(this.laneChangeElapsed / this.laneChangeDuration, 0, 1);
+    const laneCut = this.laneChangeDirection * Math.sin(laneChangeProgress * Math.PI);
+    if (this.laneChangeElapsed >= this.laneChangeDuration) this.laneChangeDirection = 0;
     const laneLean = THREE.MathUtils.clamp((LANES[this.targetLane] - this.position.x) * -0.12, -0.25, 0.25);
     this.bodyRoot.rotation.z = THREE.MathUtils.lerp(this.bodyRoot.rotation.z, laneLean * 0.4, 1 - Math.exp(-12 * delta));
     if (this.state === 'rolling') {
@@ -123,11 +156,14 @@ export class Player {
       this.bodyRoot.position.y = THREE.MathUtils.lerp(this.bodyRoot.position.y, 0, 1 - Math.exp(-18 * delta));
     }
     const rollProgress = this.state === 'rolling' ? 1 - this.rollRemaining / ROLL_DURATION : 0;
-    this.characterAnimation?.update(delta, this.state, 0.7, this.verticalVelocity, laneLean, rollProgress);
+    this.characterAnimation?.update(delta, this.state, 0.7, this.verticalVelocity, laneLean, laneCut, rollProgress);
   }
 
   reset(): void {
     this.position.set(0, 0, 4.1);
+    this.previousX = 0;
+    this.previousColliderMinY = 0.08;
+    this.previousColliderMaxY = PLAYER_STANDING_HEIGHT;
     this.bodyRoot.position.set(0, 0, 0);
     this.bodyRoot.rotation.set(0, 0, 0);
     this.lane = 1;
@@ -135,6 +171,10 @@ export class Player {
     this.verticalVelocity = 0;
     this.rollRemaining = 0;
     this.queuedJump = false;
+    this.laneChangeElapsed = LANE_CHANGE_DURATION;
+    this.laneChangeDuration = LANE_CHANGE_DURATION;
+    this.laneChangeStartX = 0;
+    this.laneChangeDirection = 0;
     this.state = 'running';
   }
 
@@ -146,18 +186,35 @@ export class Player {
 
   setPoseForTest(state: 'jumping' | 'rolling'): void {
     this.state = state;
-    this.bodyRoot.position.set(0, state === 'rolling' ? 0.7 : 0, 0);
+    const rollProgress = 0.28;
+    this.bodyRoot.position.set(0, state === 'rolling' ? Math.sin(rollProgress * Math.PI) * 0.62 + 0.08 : 0, 0);
     this.bodyRoot.rotation.set(0, 0, 0);
     if (state === 'jumping') {
       this.position.y = 1.85;
       this.verticalVelocity = 0;
       this.rollRemaining = 0;
-      this.characterAnimation?.update(1 / 60, state, 0.7, 0, 0, 0);
+      for (let frame = 0; frame < 18; frame += 1) {
+        this.characterAnimation?.update(1 / 60, state, 0.7, 0, 0, 0, 0);
+      }
     } else {
       this.position.y = 0;
       this.verticalVelocity = 0;
-      this.rollRemaining = ROLL_DURATION * 0.5;
-      this.characterAnimation?.update(1 / 60, state, 0.7, 0, 0, 0.5);
+      this.rollRemaining = ROLL_DURATION * (1 - rollProgress);
+      for (let frame = 0; frame < 18; frame += 1) {
+        this.characterAnimation?.update(1 / 60, state, 0.7, 0, 0, 0, rollProgress);
+      }
+    }
+  }
+
+  setLaneCutPoseForTest(): void {
+    this.state = 'running';
+    this.lane = 1;
+    this.targetLane = 2;
+    this.position.x = 1.18;
+    this.bodyRoot.position.set(0, 0, 0);
+    this.bodyRoot.rotation.set(0, 0, -0.03);
+    for (let frame = 0; frame < 18; frame += 1) {
+      this.characterAnimation?.update(1 / 60, 'running', 0.7, 0, 0, 1, 0);
     }
   }
 
@@ -165,8 +222,12 @@ export class Player {
     return this.position.y + 0.08;
   }
 
+  get rollProgress(): number {
+    return this.state === 'rolling' ? THREE.MathUtils.clamp(1 - this.rollRemaining / ROLL_DURATION, 0, 1) : 0;
+  }
+
   get colliderMaxY(): number {
-    return this.position.y + (this.state === 'rolling' ? 0.82 : 1.92);
+    return this.position.y + (this.state === 'rolling' ? PLAYER_ROLL_HEIGHT : PLAYER_STANDING_HEIGHT);
   }
 
   dispose(): void {

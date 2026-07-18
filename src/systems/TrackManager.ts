@@ -1,7 +1,14 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Obstacle, type ObstacleResources } from '../entities/Obstacle';
-import { createSegmentPattern, type HazardPlacement } from './PatternGenerator';
+import type { Collectible } from '../entities/Collectible';
+import {
+  chooseNextSafeLane,
+  createSegmentPattern,
+  isRecoveryGeneration,
+  type HazardPlacement,
+} from './PatternGenerator';
+import type { ProtectedRouteItem } from './RouteSafety';
 
 export type ObstacleTemplates = Record<'barrier' | 'hurdle' | 'gate' | 'drone' | 'train', THREE.Object3D>;
 import type { SeededRandom } from '../utils/random';
@@ -9,10 +16,15 @@ import type { SeededRandom } from '../utils/random';
 const SEGMENT_LENGTH = 12;
 const SEGMENT_COUNT = 10;
 const RECYCLE_Z = 17;
+const VISIBLE_FAR_Z = -64;
+const VISIBLE_NEAR_Z = 16;
+const TRAIN_ENTRY_Z = VISIBLE_FAR_Z - 2.7;
+const TRAIN_ROUTE_DISTANCE = (VISIBLE_NEAR_Z + 2.7 - TRAIN_ENTRY_Z) / 1.72;
 
 class TrackSegment {
   readonly group = new THREE.Group();
   readonly obstacles: Obstacle[] = [];
+  placements: readonly HazardPlacement[] = [];
 
   constructor(
     index: number,
@@ -27,9 +39,18 @@ class TrackSegment {
   }
 
   configure(placements: readonly HazardPlacement[]): void {
+    this.placements = placements;
     for (let i = 0; i < this.obstacles.length; i += 1) {
       const placement = placements[i];
-      if (placement) this.obstacles[i].configure(placement.type, placement.lane, placement.z, placement.motionAmplitude);
+      if (placement) {
+        this.obstacles[i].configure(
+          placement.type,
+          placement.lane,
+          placement.z,
+          placement.motionAmplitude,
+          placement.blockedLanes,
+        );
+      }
       else this.obstacles[i].disable();
     }
   }
@@ -48,6 +69,44 @@ export class TrackManager {
   private readonly markingInstances: THREE.InstancedMesh;
   private readonly instanceMatrix = new THREE.Matrix4();
   private generation = 0;
+  private safeLane = 1;
+  private trainConflictViolations = 0;
+  private trainMotionViolations = 0;
+  private prematureTrainRecycles = 0;
+  private routeWallViolations = 0;
+  private trainsEntered = 0;
+
+  get routeDiagnostics(): {
+    scheduledTrains: number;
+    visibleTrains: number;
+    leadTrainZ: number | null;
+    trainConflictViolations: number;
+    trainMotionViolations: number;
+    prematureTrainRecycles: number;
+    routeWallViolations: number;
+    trainsEntered: number;
+  } {
+    let scheduledTrains = 0;
+    let visibleTrains = 0;
+    let leadTrainZ: number | null = null;
+    for (const obstacle of this.obstacles) {
+      if (!obstacle.active || obstacle.type !== 'train') continue;
+      scheduledTrains += 1;
+      if (!obstacle.group.visible) continue;
+      visibleTrains += 1;
+      leadTrainZ = Math.max(leadTrainZ ?? -Infinity, obstacle.worldZ());
+    }
+    return {
+      scheduledTrains,
+      visibleTrains,
+      leadTrainZ,
+      trainConflictViolations: this.trainConflictViolations,
+      trainMotionViolations: this.trainMotionViolations,
+      prematureTrainRecycles: this.prematureTrainRecycles,
+      routeWallViolations: this.routeWallViolations,
+      trainsEntered: this.trainsEntered,
+    };
+  }
 
   constructor(private rng: SeededRandom) {
     const trackTexture = createTrackTexture();
@@ -97,29 +156,78 @@ export class TrackManager {
     this.reset(rng);
   }
 
-  update(delta: number, elapsed: number, speed: number): void {
+  update(
+    delta: number,
+    elapsed: number,
+    speed: number,
+    collectibles: readonly Collectible[] = [],
+    protectedItems: readonly ProtectedRouteItem[] = [],
+  ): void {
+    for (const obstacle of this.obstacles) {
+      obstacle.previousWorldX = obstacle.group.position.x;
+      obstacle.previousWorldZ = obstacle.worldZ();
+    }
     this.distance += speed * delta;
     let minZ = Infinity;
-    for (const segment of this.segments) minZ = Math.min(minZ, segment.group.position.z);
+    for (const segment of this.segments) {
+      minZ = Math.min(minZ, segment.group.position.z);
+    }
 
     for (const segment of this.segments) {
-      for (const obstacle of segment.obstacles) {
-        obstacle.previousWorldZ = obstacle.worldZ();
-        if (obstacle.active) {
-          obstacle.updateMotion(delta, elapsed, speed);
-          const worldZ = obstacle.worldZ();
-          obstacle.group.visible = worldZ > -64 && worldZ < 16;
-        }
-      }
       segment.group.position.z += speed * delta;
       if (segment.group.position.z > RECYCLE_Z) {
+        for (const obstacle of segment.obstacles) {
+          if (obstacle.active && obstacle.type === 'train' && this.distance < obstacle.trainExitDistance) {
+            this.prematureTrainRecycles += 1;
+          }
+        }
         segment.group.position.z = minZ - SEGMENT_LENGTH;
         minZ = segment.group.position.z;
-        segment.configure(createSegmentPattern(this.generation, this.rng));
+        if (isRecoveryGeneration(this.generation)) this.safeLane = chooseNextSafeLane(this.safeLane, this.rng);
+        segment.configure(createSegmentPattern(
+          this.generation,
+          this.rng,
+          this.safeLane,
+          this.reservedTrainLanes(),
+        ));
+        this.scheduleSegmentTrains(segment, collectibles, protectedItems);
         this.generation += 1;
-        for (const obstacle of segment.obstacles) obstacle.previousWorldZ = obstacle.worldZ();
+        for (const obstacle of segment.obstacles) {
+          obstacle.previousWorldX = obstacle.group.position.x;
+          obstacle.previousWorldZ = obstacle.worldZ();
+        }
       }
     }
+    for (const obstacle of this.obstacles) {
+      if (!obstacle.active) continue;
+      obstacle.updateMotion(delta, elapsed, speed, this.distance);
+      const worldZ = obstacle.worldZ();
+      const previousDistance = this.distance - speed * delta;
+      if (
+        obstacle.type === 'train' &&
+        previousDistance < obstacle.trainEnterDistance &&
+        this.distance >= obstacle.trainEnterDistance
+      ) {
+        this.trainsEntered += 1;
+      }
+      if (
+        obstacle.type === 'train' &&
+        previousDistance >= obstacle.trainEnterDistance &&
+        this.distance < obstacle.trainExitDistance
+      ) {
+        const expectedDisplacement = speed * delta * 1.72;
+        if (Math.abs(worldZ - obstacle.previousWorldZ - expectedDisplacement) > 0.02) {
+          this.trainMotionViolations += 1;
+        }
+      }
+      if (obstacle.type === 'train' && this.distance >= obstacle.trainExitDistance) {
+        obstacle.disable();
+        continue;
+      }
+      obstacle.group.visible = worldZ + obstacle.halfDepth > VISIBLE_FAR_Z && worldZ - obstacle.halfDepth < VISIBLE_NEAR_Z;
+    }
+    this.trainConflictViolations += this.countTrainConflicts(collectibles, protectedItems);
+    if (this.hasFullLaneWall()) this.routeWallViolations += 1;
     this.syncTrackInstances();
   }
 
@@ -127,15 +235,32 @@ export class TrackManager {
     this.rng = rng;
     this.distance = 0;
     this.generation = 0;
+    this.safeLane = 1;
+    this.trainConflictViolations = 0;
+    this.trainMotionViolations = 0;
+    this.prematureTrainRecycles = 0;
+    this.routeWallViolations = 0;
+    this.trainsEntered = 0;
+    for (const obstacle of this.obstacles) obstacle.disable();
     for (let i = 0; i < this.segments.length; i += 1) {
       const segment = this.segments[i];
       segment.group.position.set(0, 0, 4 - i * SEGMENT_LENGTH);
-      segment.configure(createSegmentPattern(this.generation, this.rng));
+      if (isRecoveryGeneration(this.generation)) this.safeLane = chooseNextSafeLane(this.safeLane, this.rng);
+      segment.configure(createSegmentPattern(
+        this.generation,
+        this.rng,
+        this.safeLane,
+        this.reservedTrainLanes(),
+      ));
+      this.scheduleSegmentTrains(segment, [], []);
       this.generation += 1;
-      for (const obstacle of segment.obstacles) obstacle.previousWorldZ = obstacle.worldZ();
+      for (const obstacle of segment.obstacles) {
+        obstacle.previousWorldX = obstacle.group.position.x;
+        obstacle.previousWorldZ = obstacle.worldZ();
+      }
       for (const obstacle of segment.obstacles) {
         const worldZ = obstacle.worldZ();
-        obstacle.group.visible = obstacle.active && worldZ > -64 && worldZ < 16;
+        obstacle.group.visible = obstacle.active && worldZ + obstacle.halfDepth > VISIBLE_FAR_Z && worldZ - obstacle.halfDepth < VISIBLE_NEAR_Z;
       }
     }
     this.syncTrackInstances();
@@ -152,18 +277,32 @@ export class TrackManager {
   setShowcaseForTest(): void {
     for (const obstacle of this.obstacles) obstacle.disable();
     const showcase = [
-      { type: 'train', lane: 1, worldZ: -31 },
+      { type: 'train', lane: 1, worldZ: -38 },
       { type: 'drone', lane: 0, worldZ: -19 },
       { type: 'gate', lane: 2, worldZ: -25 },
       { type: 'hurdle', lane: 1, worldZ: -12 },
+      { type: 'barrier', lane: 1, worldZ: -24 },
     ] as const;
     for (let index = 0; index < showcase.length; index += 1) {
-      const obstacle = this.obstacles[index];
+      const obstacle = index === 0 ? this.segments[this.segments.length - 1].obstacles[0] : this.obstacles[index];
       const item = showcase[index];
       const segmentZ = obstacle.group.parent?.position.z ?? 0;
       obstacle.configure(item.type, item.lane, item.worldZ - segmentZ, item.type === 'drone' ? 1.1 : 0);
+      if (item.type === 'train') {
+        obstacle.scheduleTrain(this.distance, this.distance, this.distance + TRAIN_ROUTE_DISTANCE, TRAIN_ENTRY_Z);
+      }
+      obstacle.previousWorldX = obstacle.group.position.x;
       obstacle.previousWorldZ = obstacle.worldZ();
     }
+  }
+
+  setCollisionForTest(): void {
+    for (const obstacle of this.obstacles) obstacle.disable();
+    const obstacle = this.obstacles[0];
+    const segmentZ = obstacle.group.parent?.position.z ?? 0;
+    obstacle.configure('barrier', 1, -4 - segmentZ);
+    obstacle.previousWorldX = obstacle.group.position.x;
+    obstacle.previousWorldZ = obstacle.worldZ();
   }
 
   dispose(): void {
@@ -239,6 +378,156 @@ export class TrackManager {
     }
     this.deckInstances.instanceMatrix.needsUpdate = true;
     this.markingInstances.instanceMatrix.needsUpdate = true;
+  }
+
+  private scheduleSegmentTrains(
+    segment: TrackSegment,
+    collectibles: readonly Collectible[],
+    protectedItems: readonly ProtectedRouteItem[],
+  ): void {
+    const trains = segment.obstacles.filter((obstacle) => obstacle.active && obstacle.type === 'train');
+    if (trains.length === 0) return;
+
+    for (const train of trains) {
+      let enterDistance = this.distance;
+      const maxIterations = this.obstacles.length + collectibles.length + protectedItems.length + 2;
+      for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+        let nextEnterDistance = enterDistance;
+        for (const obstacle of this.obstacles) {
+          if (!obstacle.active || trains.includes(obstacle)) continue;
+          if (obstacle.type === 'train') {
+            if (obstacle.occupiedLanes.includes(train.lane)) {
+              nextEnterDistance = Math.max(nextEnterDistance, obstacle.trainExitDistance);
+            }
+            continue;
+          }
+          if (!this.blocksTrainRoute(train, obstacle)) continue;
+          nextEnterDistance = Math.max(
+            nextEnterDistance,
+            this.requiredTrainEntryDistance(
+              enterDistance,
+              obstacle.worldZ(),
+              obstacle.halfDepth,
+              VISIBLE_NEAR_Z,
+            ),
+          );
+        }
+        for (const item of collectibles) {
+          if (!item.active || item.routeProtected === false || Math.abs(item.x - train.group.position.x) >= 0.8) continue;
+          nextEnterDistance = Math.max(
+            nextEnterDistance,
+            this.requiredTrainEntryDistance(enterDistance, item.z, item.routeHalfDepth ?? 0.35, 11),
+          );
+        }
+        for (const item of protectedItems) {
+          if (!item.active || item.routeProtected === false || Math.abs(item.x - train.group.position.x) >= 0.8) continue;
+          nextEnterDistance = Math.max(
+            nextEnterDistance,
+            this.requiredTrainEntryDistance(enterDistance, item.z, item.routeHalfDepth ?? 0.45, 11),
+          );
+        }
+        if (nextEnterDistance <= enterDistance + 0.0001) break;
+        enterDistance = nextEnterDistance;
+      }
+
+      const exitDistance = enterDistance + TRAIN_ROUTE_DISTANCE;
+      const recycleDistance = this.distance + RECYCLE_Z - segment.group.position.z;
+      if (exitDistance + 1 > recycleDistance) {
+        train.configure('barrier', train.lane, train.group.position.z);
+      } else {
+        train.scheduleTrain(this.distance, enterDistance, exitDistance, TRAIN_ENTRY_Z);
+        if (enterDistance <= this.distance + 0.0001) this.trainsEntered += 1;
+      }
+    }
+  }
+
+  private requiredTrainEntryDistance(
+    enterDistance: number,
+    bodyWorldZ: number,
+    bodyHalfDepth: number,
+    clearZ: number,
+  ): number {
+    const bodyZAtEntry = bodyWorldZ + enterDistance - this.distance;
+    const gapAtEntry = bodyZAtEntry - TRAIN_ENTRY_Z;
+    const clearance = 2.7 + bodyHalfDepth + 0.1;
+    const closingDistance = 0.72 * TRAIN_ROUTE_DISTANCE;
+    if (gapAtEntry <= -clearance || gapAtEntry >= closingDistance + clearance) return enterDistance;
+    return Math.max(enterDistance, this.distance + clearZ + bodyHalfDepth - bodyWorldZ);
+  }
+
+  private blocksTrainRoute(train: Obstacle, obstacle: Obstacle): boolean {
+    if (obstacle.occupiedLanes.includes(train.lane)) return true;
+    const blocked = new Set<number>([train.lane]);
+    const rowZ = obstacle.worldZ();
+    for (const rowObstacle of this.obstacles) {
+      if (!rowObstacle.active || rowObstacle.type === 'train') continue;
+      if (Math.abs(rowObstacle.worldZ() - rowZ) > 0.1) continue;
+      for (const lane of rowObstacle.occupiedLanes) blocked.add(lane);
+    }
+    return blocked.size >= 3;
+  }
+
+  private reservedTrainLanes(): number[] {
+    const lanes: number[] = [];
+    for (const obstacle of this.obstacles) {
+      if (!obstacle.active || obstacle.type !== 'train' || obstacle.trainExitDistance <= this.distance) continue;
+      for (const lane of obstacle.occupiedLanes) {
+        if (!lanes.includes(lane)) lanes.push(lane);
+      }
+    }
+    return lanes;
+  }
+
+  private countTrainConflicts(
+    collectibles: readonly Collectible[],
+    protectedItems: readonly ProtectedRouteItem[],
+  ): number {
+    let conflicts = 0;
+    for (const train of this.obstacles) {
+      if (!train.active || train.type !== 'train' || !train.group.visible) continue;
+      for (const obstacle of this.obstacles) {
+        if (obstacle === train || !obstacle.active || !obstacle.occupiedLanes.includes(train.lane)) continue;
+        const overlapDistance = train.halfDepth + obstacle.halfDepth + 0.1;
+        if (Math.abs(train.worldZ() - obstacle.worldZ()) < overlapDistance) conflicts += 1;
+      }
+      for (const item of collectibles) {
+        if (!item.active || item.routeProtected === false || Math.abs(item.x - train.group.position.x) >= 0.8) continue;
+        if (Math.abs(train.worldZ() - item.z) < train.halfDepth + item.routeHalfDepth + 0.1) conflicts += 1;
+      }
+      for (const item of protectedItems) {
+        if (!item.active || item.routeProtected === false || Math.abs(item.x - train.group.position.x) >= 0.8) continue;
+        if (Math.abs(train.worldZ() - item.z) < train.halfDepth + (item.routeHalfDepth ?? 0.45) + 0.1) {
+          conflicts += 1;
+        }
+      }
+    }
+    return conflicts;
+  }
+
+  private hasFullLaneWall(): boolean {
+    for (const boundaryObstacle of this.obstacles) {
+      if (!boundaryObstacle.active) continue;
+      const halfDepth = boundaryObstacle.halfDepth + 0.38;
+      if (this.isFullLaneWallAt(boundaryObstacle.worldZ() - halfDepth)) return true;
+      if (this.isFullLaneWallAt(boundaryObstacle.worldZ() + halfDepth)) return true;
+    }
+    return false;
+  }
+
+  private isFullLaneWallAt(z: number): boolean {
+    let lane0 = false;
+    let lane1 = false;
+    let lane2 = false;
+    for (const obstacle of this.obstacles) {
+      if (!obstacle.active || Math.abs(obstacle.worldZ() - z) > obstacle.halfDepth + 0.381) continue;
+      for (const lane of obstacle.occupiedLanes) {
+        if (lane === 0) lane0 = true;
+        else if (lane === 1) lane1 = true;
+        else if (lane === 2) lane2 = true;
+      }
+      if (lane0 && lane1 && lane2) return true;
+    }
+    return false;
   }
 }
 

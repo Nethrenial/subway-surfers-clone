@@ -28,7 +28,7 @@ export class Game {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly renderPipeline: RenderPipeline;
   private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.PerspectiveCamera(55, 9 / 16, 0.1, 150);
+  private readonly camera = new THREE.PerspectiveCamera(62, 9 / 16, 0.1, 170);
   private readonly input: InputController;
   private readonly player = new Player();
   private readonly collision = new CollisionSystem();
@@ -56,6 +56,8 @@ export class Game {
   private speed = BASE_SPEED;
   private pausedForScreenshot = false;
   private reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  private invulnerableForTest = false;
+  private speedOverrideForTest: number | null = null;
   private tutorialTime = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -73,7 +75,7 @@ export class Game {
       onStart: () => this.beginRun(),
       onPause: () => this.pause(),
       onResume: () => this.resume(),
-      onRestart: () => this.resetRun(),
+      onRestart: () => this.resetRun(this.nextRunSeed()),
       onSettings: (open) => {
         this.hud.setSettingsVisible(open);
         this.audio.play('confirm');
@@ -172,7 +174,7 @@ export class Game {
       if (this.state === 'paused') this.resume();
       else if (this.state === 'running') this.pause();
     }
-    if (this.state === 'game-over' && (input.restart || input.jump)) this.resetRun();
+    if (this.state === 'game-over' && (input.restart || input.jump)) this.resetRun(this.nextRunSeed());
     if (this.pausedForScreenshot || this.state !== 'running') {
       this.publishDiagnostics();
       return;
@@ -182,31 +184,33 @@ export class Game {
     this.tutorialTime += delta;
     if (this.tutorialTime > 4 || input.left || input.right || input.jump || input.roll) this.hud.hideTutorial();
 
-    this.speed = Math.min(MAX_SPEED, BASE_SPEED + this.elapsed * 0.075);
+    this.speed = this.speedOverrideForTest ?? Math.min(MAX_SPEED, BASE_SPEED + this.elapsed * 0.075);
     if (input.left || input.right) this.audio.play('lane');
     if (input.jump) this.audio.play('jump');
     if (input.roll) this.audio.play('roll');
     this.player.jumpMultiplier = this.powerUps.jumpMultiplier;
     this.player.update(delta, input);
-    this.track.update(delta, this.elapsed, this.speed);
+    this.track.update(delta, this.elapsed, this.speed, this.collectibles.pool.items, this.powerUps.routeItems);
     this.worldArt?.update(delta, this.speed);
-    const collectedPower = this.powerUps.update(delta, this.speed, this.player);
+    const collectedPower = this.powerUps.update(delta, this.speed, this.player, this.track.obstacles);
     if (collectedPower) {
       this.effects.burst(this.player.position.x, this.player.position.y + 1, this.player.position.z);
       this.cameraRig.addTrauma(0.16);
       this.hud.flashPowerUp();
       this.audio.play('power');
     }
-    const collection = this.collectibles.update(delta, this.speed, this.player, this.powerUps.magnetActive);
+    const collection = this.collectibles.update(delta, this.speed, this.player, this.powerUps.magnetActive, this.track.obstacles);
     if (collection.count > 0) {
       this.scoreSystem.collect(collection.value, this.powerUps.scoreMultiplier);
-      this.effects.burst(collection.x, collection.y, collection.z);
+      for (let index = 0; index < collection.count; index += 1) {
+        this.effects.burst(collection.xs[index], collection.ys[index], collection.zs[index]);
+      }
       this.cameraRig.addTrauma(0.08);
       this.hud.flashCollect();
-      this.audio.play(collection.value >= 5 ? 'rare' : 'coin');
+      this.audio.play(collection.rareCount > 0 ? 'rare' : 'coin');
     }
     const hit = this.collision.findPlayerHit(this.player, this.track.obstacles);
-    if (hit) {
+    if (hit && !this.invulnerableForTest) {
       if (this.powerUps.consumeShield()) {
         hit.disable();
         this.cameraRig.addTrauma(0.42);
@@ -324,7 +328,7 @@ export class Game {
     this.tutorialTime = 0;
     this.player.reset();
     this.track.reset(this.rng);
-    this.collectibles.reset(this.rng);
+    this.collectibles.reset(this.rng, this.track.obstacles);
     this.powerUps.reset(this.rng);
     this.effects.reset();
     this.worldArt?.reset();
@@ -337,7 +341,13 @@ export class Game {
   private beginRun(): void {
     void this.audio.unlock();
     this.audio.play('confirm');
-    this.resetRun();
+    this.resetRun(this.nextRunSeed());
+  }
+
+  private nextRunSeed(): number {
+    const values = new Uint32Array(1);
+    crypto.getRandomValues(values);
+    return values[0] === this.seedValue ? (values[0] + 1) >>> 0 : values[0];
   }
 
   private setAudioVolume(group: AudioGroup, value: number): void {
@@ -345,7 +355,7 @@ export class Game {
   }
 
   private refreshPresentationForTest(): void {
-    this.collectibles.update(0, this.speed, this.player, this.powerUps.magnetActive);
+    this.collectibles.update(0, this.speed, this.player, this.powerUps.magnetActive, this.track.obstacles);
     this.effects.update(0, this.speed, this.player, this.powerUps.remaining.shield > 0);
     this.cameraRig.update(0, this.player.position.x, true);
     this.hud.update(
@@ -382,6 +392,22 @@ export class Game {
           this.resetRun();
           this.refreshPresentationForTest();
         }
+        else if (name === 'collision-test') {
+          this.resetRun();
+          this.track.setCollisionForTest();
+          this.refreshPresentationForTest();
+        }
+        else if (name === 'collectible-test') {
+          this.resetRun();
+          this.collectibles.spawnForTest(this.player);
+          this.refreshPresentationForTest();
+        }
+        else if (name === 'magnet-capture-test') {
+          this.resetRun();
+          this.collectibles.spawnMagnetTrailForTest(this.player);
+          this.powerUps.activate('magnet');
+          this.refreshPresentationForTest();
+        }
         else if (name === 'game-over') {
           this.resetRun();
           this.endRun();
@@ -409,6 +435,11 @@ export class Game {
           this.player.setPoseForTest(name === 'jump-test' ? 'jumping' : 'rolling');
           this.refreshPresentationForTest();
         }
+        else if (name === 'lane-cut-test') {
+          this.resetRun();
+          this.player.setLaneCutPoseForTest();
+          this.refreshPresentationForTest();
+        }
         else console.warn(`Unknown test state: ${name}`);
       },
       setPausedForScreenshot: (paused: boolean) => {
@@ -420,6 +451,12 @@ export class Game {
       hideDebugUi: () => undefined,
       input: (action: InputAction) => this.input.queue(action),
       grantPowerUp: (type: PowerUpType) => this.powerUps.activate(type),
+      setInvulnerable: (enabled: boolean) => {
+        this.invulnerableForTest = enabled;
+      },
+      setSpeedForTest: (speed: number | null) => {
+        this.speedOverrideForTest = speed;
+      },
     };
   }
 
@@ -427,6 +464,7 @@ export class Game {
     const info = this.renderer.info;
     window.__THREE_GAME_DIAGNOSTICS__ = {
       frame: this.frame,
+      seed: this.seedValue,
       elapsed: this.elapsed,
       score: this.scoreSystem.score,
       distance: this.scoreSystem.distance,
@@ -440,11 +478,14 @@ export class Game {
         lane: this.player.lane,
         targetLane: this.player.targetLane,
         state: this.player.state,
+        rollProgress: this.player.rollProgress,
       },
       entities: {
         obstacles: this.track.obstacles.filter((obstacle) => obstacle.active).length,
         collectibles: this.collectibles.pool.activeCount,
+        ...this.collectibles.captureDiagnostics,
         segments: 10,
+        ...this.track.routeDiagnostics,
       },
       assets: { ...this.assets.diagnostics },
       audio: this.audio.diagnostics,

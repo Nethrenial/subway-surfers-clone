@@ -2,6 +2,7 @@
 
 interface ThreeGameDiagnostics {
   frame: number;
+  seed: number;
   elapsed: number;
   score: number;
   distance: number;
@@ -15,8 +16,25 @@ interface ThreeGameDiagnostics {
     lane: number;
     targetLane: number;
     state: 'running' | 'jumping' | 'rolling' | 'crashed';
+    rollProgress: number;
   };
-  entities: { obstacles: number; collectibles: number; segments: number };
+  entities: {
+    obstacles: number;
+    collectibles: number;
+    authored: number;
+    capturing: number;
+    magnetCapturesStarted: number;
+    maxConcurrentCaptures: number;
+    segments: number;
+    scheduledTrains: number;
+    visibleTrains: number;
+    leadTrainZ: number | null;
+    trainConflictViolations: number;
+    trainMotionViolations: number;
+    prematureTrainRecycles: number;
+    routeWallViolations: number;
+    trainsEntered: number;
+  };
   assets: { files: number; meshes: number; triangles: number; materials: number };
   audio: { unlocked: boolean; state: string; master: number; music: number; sfx: number };
   renderer: {
@@ -50,6 +68,8 @@ interface ThreeGameTestHooks {
   hideDebugUi(hidden: boolean): void;
   input(action: 'left' | 'right' | 'jump' | 'roll' | 'pause' | 'restart'): void;
   grantPowerUp(type: 'magnet' | 'shield' | 'multiplier' | 'jump-boost'): void;
+  setInvulnerable(enabled: boolean): void;
+  setSpeedForTest(speed: number | null): void;
 }
 
 interface Window {

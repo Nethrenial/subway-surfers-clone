@@ -22,6 +22,7 @@ for (const state of [
   'menu',
   'settings',
   'active-play',
+  'lane-cut-test',
   'jump-test',
   'roll-test',
   'hazard-showcase',

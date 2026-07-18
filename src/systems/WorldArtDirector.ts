@@ -5,6 +5,7 @@ const MODULE_LENGTH = 22;
 const MODULES_PER_BATCH = 3;
 const BATCH_COUNT = 2;
 const BATCH_LENGTH = MODULE_LENGTH * MODULES_PER_BATCH;
+const RECYCLE_Z = 18 + MODULE_LENGTH * (MODULES_PER_BATCH - 1);
 
 export interface WorldTemplates {
   arch: THREE.Object3D;
@@ -80,7 +81,7 @@ export class WorldArtDirector {
     for (const segment of this.segments) minZ = Math.min(minZ, segment.position.z);
     for (const segment of this.segments) {
       segment.position.z += speed * delta;
-      if (segment.position.z > 18) {
+      if (segment.position.z > RECYCLE_Z) {
         segment.position.z = minZ - BATCH_LENGTH;
         minZ = segment.position.z;
       }

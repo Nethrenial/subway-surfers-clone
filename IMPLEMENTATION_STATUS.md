@@ -4,7 +4,7 @@ Last updated: 2026-07-18
 
 ## Current Playable Build
 
-Neon Relay opens on a complete main menu and runs as an endless three-lane courier trial. The player can switch lanes, jump, somersault-roll, collect common and rare signal currency, acquire four power-ups, survive one collision with a shield, pause, configure audio, view a run summary, and restart. Blender-authored assets, hierarchical character motion, animated hazards, procedural audio, batched city modules, deterministic patterns, and responsive presentation are integrated.
+Neon Relay opens on a complete main menu and runs as an endless three-lane courier trial. The player can switch lanes, jump, forward-roll, collect common and rare signal currency, acquire four power-ups, survive one collision with a shield, pause, configure audio, view a run summary, and restart. Blender-authored assets, hierarchical humanoid motion, fixed-track chase framing, route-aware hazards and rewards, procedural audio, safely recycled city modules, varied run seeds, deterministic test hooks, and responsive presentation are integrated.
 
 ## Stage Checklist
 
@@ -83,22 +83,31 @@ Status: complete and verified at the premium gate.
 - [x] Imported asset browser assertions and loading-screen transition
 - [x] Neutral tone mapping, one shadow-casting key, controlled practical/rim lighting, fog, and desktop-only bloom
 - [x] Character animation for run cycle, airborne pose, hip-pivot roll, landing compression, lane lean, crash, pack, and signal ribbon
+- [x] Fixed-track chase camera with body-driven lateral lane-cut motion
+- [x] Player-relative jump, roll, either-action, and lane-avoidance obstacle profiles
+- [x] Offscreen train scheduling with uninterrupted visible motion and reserved future hazard/reward lanes
+- [x] Persistent safe-corridor grammar with one pressure row per segment and measured recovery transitions
+- [x] Duration-based lane motion plus time-correlated swept X/Y/Z collision intervals
+- [x] Serial per-coin magnet capture arcs with frame-partition coverage at minimum and maximum speed
+- [x] Fresh production run seeds with deterministic visual and browser-test hooks
+- [x] Full-batch city recycling after the final child module clears the camera
 - [x] Moving trains, hovering/rotating drones, gate teeth, hurdle blade, warning motion, and deterministic hazard showcase
 - [x] Instanced burst particles, speed streaks, shoe trails, and shield shell
 - [x] Procedural Web Audio music, ambience, movement, pickup, threat, and UI matrix with grouped volume controls
 - [x] Full menu, loading, settings, pause, failure, safe-area, and polished HUD states
-- [x] 18-state desktop/mobile visual regression harness
+- [x] 20-state desktop/mobile visual regression harness
 - [x] Ten-category fresh-eyes scorecard: `23/30`, premium pass, showcase not claimed
 
 Verification evidence:
 
 - `npm run build`: pass under strict TypeScript
-- `npm run test:unit`: 18 assertions passed
-- `npm run verify:visual`: 4 active desktop/mobile browser tests passed; 2 desktop-only seeded deep-path tests passed and mobile variants intentionally skipped
-- Visual regression: 18 desktop/mobile baselines passed
-- Desktop active canvas: 132 calls, 176,154 triangles, 89 geometries, 19 textures, 2 post passes, 8.34 ms smoothed frame time
-- Mobile active canvas: 118 calls, 173,476 triangles, 88 geometries, 6 textures, 0 post passes, 10.53 ms smoothed frame time
+- `npm run test:unit`: 36 assertions passed across 11 files
+- `npm run verify:visual`: 7 active browser tests passed; 5 viewport-independent mobile duplicates intentionally skipped
+- Visual regression: 20 desktop/mobile baselines passed
+- Desktop active canvas: 116 calls, 183,822 triangles, 91 geometries, 19 textures, 2 post passes, 8.35 ms smoothed frame time
+- Mobile active canvas: 102 calls, 183,808 triangles, 90 geometries, 6 textures, 0 post passes, 10.55 ms smoothed frame time
 - Both tiers: nonblank canvas, within renderer budgets, no console/page errors
+- Maximum-speed live route soak: generated train entered; zero full-lane walls, train/content overlaps, train velocity discontinuities, or premature train recycling
 
 ### Stage 4: Progression
 
@@ -130,7 +139,7 @@ Status: not started.
 
 - No known Stage 1 or Stage 2 blocking bug after automated desktop/mobile verification.
 - The Stage 3 pass satisfies the premium scorecard but not the showcase gate; repeated city modules, reward vocabulary, and restrained impact VFX are the largest remaining visual gaps.
-- Mobile active play uses 118 calls against the 150-call hard budget after fidelity upgrades.
+- Mobile active play uses 102 calls against the 150-call hard budget after the humanoid and route-planning corrections.
 - Physical iOS and Android touch/audio/performance checks have not yet run.
 - Full two-minute bot playtesting remains a Stage 5 release task.
 

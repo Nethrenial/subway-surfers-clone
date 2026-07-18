@@ -6,7 +6,7 @@ This project is inspired by the lane-based endless-runner genre. It does not use
 
 ## Current State
 
-Stages 1 through 3 are complete. The playable runner now includes an articulated Blender-authored courier, animated hazard machinery and oncoming trains, a layered city kit, textured PBR materials, desktop bloom, mobile direct rendering, procedural adaptive audio, a full menu/settings/pause/failure flow, and deterministic desktop/mobile visual baselines. Persistent progression remains the next major stage in `IMPLEMENTATION_STATUS.md`.
+Stages 1 through 3 are complete. The playable runner now includes an articulated Blender-authored humanoid courier, fixed-track chase framing, player-relative obstacle traversal, route-aware trains and rewards, animated hazard machinery, a layered city kit, textured PBR materials, desktop bloom, mobile direct rendering, procedural adaptive audio, a full menu/settings/pause/failure flow, and deterministic desktop/mobile visual baselines. Persistent progression remains the next major stage in `IMPLEMENTATION_STATUS.md`.
 
 ## Run Locally
 
@@ -65,9 +65,9 @@ npm run inspect:canvas -- --url http://127.0.0.1:5188 --state active-play --seed
 - Start: two safe track segments establish speed and lane scale.
 - First decision: a single readable hazard introduces lane switching.
 - First threat: low hurdles, overhead gates, and full-height blockers test jump, roll, and lane changes; later patterns add long trains and lane-sweeping drones.
-- Escalation: speed rises from `10.8` to `18.5` world units per second; later patterns can block two lanes and add a second row.
-- Recovery: row spacing and safe startup segments provide breathing room.
-- Fairness: seeded generation chooses a safe lane before placing hazards; it never fills all three lanes in one row.
+- Escalation: speed rises from `10.8` to `18.5` world units per second; later pressure rows can block two lanes and add moving drones or continuously approaching trains.
+- Recovery: every fifth generated segment is empty, giving enough measured distance for an adjacent safe-corridor transition at maximum speed.
+- Fairness: one pressure row per segment preserves a reachable corridor. Corridor changes are adjacent and occur only across recovery segments; active train lanes remain reserved from later hazards and rewards.
 - Risk/reward: common trails teach viable routes, raised arcs reward jumping, and rare shards increase currency value.
 - Failure: collision flash, camera impulse, crashed pose, summary overlay, and one-input restart explain the setback.
 
@@ -84,12 +84,13 @@ The code follows engine-like ownership without abstracting beyond current mechan
 | `src/core/InputController.ts` | Keyboard and pointer gestures converted to one-frame intents |
 | `src/core/ObjectPool.ts` | Fixed-capacity reusable gameplay objects |
 | `src/game/Game.ts` | State transitions and explicit system update order |
-| `src/entities/Player.ts` | Lane target, jump/roll queueing, animation, and collision proxy |
-| `src/entities/Obstacle.ts` | Pooled hazard profiles and collision bounds |
+| `src/entities/Player.ts` | Duration-based lane trajectory, jump/roll queueing, animation, and collision proxy |
+| `src/entities/Obstacle.ts` | Pooled hazard profiles, player-relative traversal classes, swept lanes, and collision bounds |
 | `src/entities/Collectible.ts` | Allocation-free pooled collectible data |
 | `src/systems/TrackManager.ts` | Reusable segments, seeded fair patterns, and difficulty-ready recycling |
 | `src/systems/PatternGenerator.ts` | Pure safe-row generation and validation rules |
-| `src/systems/CollectibleSystem.ts` | Instanced coin/rare trails, collection, and magnet attraction |
+| `src/systems/RouteSafety.ts` | Hazard-free reward lanes and active train-lane reservations |
+| `src/systems/CollectibleSystem.ts` | Instanced trails and serial per-coin magnet capture arcs |
 | `src/systems/PowerUpSystem.ts` | Pooled pickups and explicit duration/stack/consumption rules |
 | `src/systems/ScoreSystem.ts` | Distance, currency, reward, and multiplier calculations |
 | `src/systems/EffectsManager.ts` | Instanced collection and shield burst particles |
@@ -97,8 +98,8 @@ The code follows engine-like ownership without abstracting beyond current mechan
 | `src/systems/AudioManager.ts` | Browser-unlocked procedural music, ambience, movement, pickup, threat, and UI audio |
 | `src/systems/RenderPipeline.ts` | Measured desktop bloom and direct mobile rendering |
 | `src/systems/WorldArtDirector.ts` | Batched recycling of authored city modules and near-world props |
-| `src/systems/CollisionSystem.ts` | Allocation-free swept Z and AABB overlap checks |
-| `src/systems/CameraRig.ts` | Chase framing and trauma-based impact response |
+| `src/systems/CollisionSystem.ts` | Time-correlated swept X/Y/Z collision intervals |
+| `src/systems/CameraRig.ts` | Fixed-track chase framing and trauma-based impact response |
 | `src/systems/Hud.ts` | HUD and pause/game-over presentation driven by game state |
 
 Update order:
@@ -107,11 +108,11 @@ Update order:
 input -> state gate -> power state -> player -> track/spawns -> pickups -> collision -> score/effects -> camera -> HUD -> diagnostics -> render
 ```
 
-Frequently reused track segments, obstacle profiles, collectibles, power-up pickups, and particles remain allocated and are reconfigured when recycled. Coin and particle visuals use instanced meshes. Gameplay randomness flows through a seeded generator for deterministic visual and playtest hooks.
+Frequently reused track segments, obstacle profiles, collectibles, power-up pickups, and particles remain allocated and are reconfigured when recycled. Coin and particle visuals use instanced meshes. Normal starts and restarts receive fresh run seeds, while explicit seeded hooks preserve deterministic visual and playtest states.
 
 ## Testing
 
-Vitest covers scoring, pooling, player transitions, animated train/drone motion, power-up rules, swipe interpretation, and thousands of seeded procedural patterns. `tests/visual.spec.ts` runs against desktop Chromium and mobile WebKit emulation. It verifies:
+Vitest covers 36 assertions across scoring, pooling, duration-based player transitions, swept collision timing, serial magnet capture, fixed camera framing, physical obstacle traversal, route scheduling, animated train/drone motion, city recycling, power-up rules, swipe interpretation, and thousands of seeded procedural patterns. `tests/visual.spec.ts` runs against desktop Chromium and mobile WebKit emulation. It verifies:
 
 - Nonblank, varied WebGL output and portrait framing
 - Objective progression through distance and score
@@ -121,14 +122,17 @@ Vitest covers scoring, pooling, player transitions, animated train/drone motion,
 - Pause freezes simulation and resume continues it
 - Game-over presentation and restart
 - Real instanced coin collection and currency feedback
-- Real pooled magnet acquisition and duration UI
+- Real pooled magnet acquisition, one-at-a-time coin detachment, and duration UI
 - Score-multiplier state and HUD feedback
 - Shield consumption against a real seeded obstacle collision
+- Fresh seeds across normal restarts
+- Visible trains moving continuously after offscreen route scheduling
+- An eight-second maximum-speed live route soak with a generated train and zero full-lane walls, route overlaps, velocity discontinuities, or premature recycling
 - No console or page errors
 
 The game exposes `window.__THREE_GAME_DIAGNOSTICS__` and deterministic `window.__THREE_GAME_TEST_HOOKS__` for browser QA, canvas inspection, and future bot playtests.
 
-`tests/visual-regression.spec.ts` protects 18 desktop/mobile states: menu, settings, active play, jump apex, roll tuck, hazard showcase, shield, pause, and game over. Current serial active-play measurements are 132 calls and 176,154 triangles on desktop, and 118 calls and 173,476 triangles on mobile, with no console or page errors.
+`tests/visual-regression.spec.ts` protects 20 desktop/mobile states: menu, settings, active play, lane cut, jump apex, forward-roll tuck, hazard showcase, shield, pause, and game over. Current serial active-play measurements are 116 calls and 183,822 triangles on desktop, and 102 calls and 183,808 triangles on mobile, with no console or page errors.
 
 ## Assets And Licenses
 

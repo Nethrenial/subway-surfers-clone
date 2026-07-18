@@ -5,6 +5,7 @@ import type { Player } from '../entities/Player';
 import type { Obstacle } from '../entities/Obstacle';
 import { findClearLane } from './RouteSafety';
 import type { SeededRandom } from '../utils/random';
+import { sampleTrackRenderPose, type TrackRenderPose } from './TrackCurve';
 
 export interface CollectionResult {
   count: number;
@@ -62,6 +63,7 @@ export class CollectibleSystem {
   private readonly rotation = new THREE.Quaternion();
   private readonly scale = new THREE.Vector3(1, 1, 1);
   private readonly euler = new THREE.Euler();
+  private readonly renderPose: TrackRenderPose = { x: 0, y: 0, z: 0, pitch: 0 };
   private rng: SeededRandom;
   private spawnCursorZ = -16;
   private trailIndex = 0;
@@ -203,8 +205,9 @@ export class CollectibleSystem {
     let rareIndex = 0;
     for (const collectible of this.pool.items) {
       if (!collectible.active) continue;
-      this.position.set(collectible.x, collectible.y, collectible.z);
-      this.euler.set(0, collectible.spin, 0);
+      sampleTrackRenderPose(collectible.x, collectible.z, this.renderPose);
+      this.position.set(this.renderPose.x, collectible.y + this.renderPose.y, this.renderPose.z);
+      this.euler.set(this.renderPose.pitch, collectible.spin, 0, 'YXZ');
       this.rotation.setFromEuler(this.euler);
       this.matrix.compose(this.position, this.rotation, this.scale);
       if (collectible.rare) this.rares.setMatrixAt(rareIndex++, this.matrix);

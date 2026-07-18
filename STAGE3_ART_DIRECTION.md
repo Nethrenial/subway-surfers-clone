@@ -111,7 +111,7 @@ Runtime integration checkpoint:
 
 - All eight GLBs load through `AssetManager` with fallback handling.
 - Direct children are merged only within the same anatomical pivot and material; the courier retains hips/spine/chest/head, paired arm and leg chains, pack suspension, and three ribbon joints.
-- Trains are scheduled while offscreen, reserve their lanes from later hazards and rewards, then approach continuously at `1.72x` track-relative speed from their first visible frame. Drones reserve every lane in their lateral sweep, hover, bank, and rotate paired blades; gates, hurdles, and warning profiles retain independent motion cues.
+- Trains are scheduled while offscreen, reserve their lanes from later hazards and rewards, then approach continuously at `1.86x` track-relative speed from their first visible frame. The three lanes remain laterally straight while a shared render-only Earth curve rolls the distant route down toward the horizon; collision and scheduling stay in flat logical lane coordinates. Drones reserve every lane in their lateral sweep, hover, bank, and rotate paired blades; gates, hurdles, and warning profiles retain independent motion cues.
 - Six full-detail city modules are merged into two independently recycled 66 m batches. Each batch recycles only after its final child module clears the camera. Ten road decks/marking sets render as two instanced submissions.
 - Detailed hero meshes use one capsule shadow proxy rather than repeating every articulated part in the shadow pass.
 - Far hazard visuals enter at 64 m under exponential fog; collision state is never culled and no close-range LOD is used.

@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { PLAYER_JUMP_APEX, PLAYER_ROLL_HEIGHT, PLAYER_STANDING_HEIGHT } from './Player';
+import { sampleTrackRenderPose, type TrackRenderPose } from '../systems/TrackCurve';
+import { TRAIN_RELATIVE_SPEED } from '../game/RunnerTuning';
 
 export type ObstacleType = 'barrier' | 'hurdle' | 'gate' | 'drone' | 'train';
 export type ObstacleTraversal = 'jump' | 'roll' | 'either' | 'avoid';
@@ -28,9 +30,12 @@ export class Obstacle {
   trainEnterDistance = 0;
   trainExitDistance = 0;
   private baseX = 0;
+  private logicalX = 0;
+  private logicalLocalZ = 0;
   private trainEntryLocalZ = 0;
   private motionAmplitude = 0;
   private motionPhase = 0;
+  private readonly renderPose: TrackRenderPose = { x: 0, y: 0, z: 0, pitch: 0 };
 
   private readonly profiles: Record<ObstacleType, THREE.Object3D>;
 
@@ -74,7 +79,8 @@ export class Obstacle {
     this.trainEnterDistance = 0;
     this.trainExitDistance = 0;
     this.motionPhase = lane * 1.7 + localZ * 0.13;
-    this.group.position.set(this.baseX, 0, localZ);
+    this.logicalX = this.baseX;
+    this.logicalLocalZ = localZ;
     for (const [name, profile] of Object.entries(this.profiles)) {
       profile.visible = name === type;
       profile.position.set(0, 0, 0);
@@ -115,6 +121,7 @@ export class Obstacle {
       this.minY = 0;
       this.maxY = PLAYER_STANDING_HEIGHT * 1.28;
     }
+    this.syncVisualTransform();
   }
 
   scheduleTrain(currentDistance: number, enterDistance: number, exitDistance: number, entryWorldZ: number): void {
@@ -122,7 +129,8 @@ export class Obstacle {
     this.trainEnterDistance = enterDistance;
     this.trainExitDistance = exitDistance;
     this.trainEntryLocalZ = entryWorldZ - parentZ - (enterDistance - currentDistance);
-    this.group.position.z = this.trainEntryLocalZ;
+    this.logicalLocalZ = this.trainEntryLocalZ;
+    this.syncVisualTransform();
   }
 
   updateMotion(_delta: number, elapsed: number, _worldSpeed: number, routeDistance = 0): void {
@@ -130,10 +138,11 @@ export class Obstacle {
     const pulse = Math.sin(elapsed * 5.2 + this.motionPhase);
     if (this.motionAmplitude !== 0) {
       const sweep = 0.5 + Math.sin(elapsed * 1.75 + this.motionPhase) * 0.5;
-      this.group.position.x = this.baseX + this.motionAmplitude * sweep;
+      this.logicalX = this.baseX + this.motionAmplitude * sweep;
     }
     if (this.type === 'train') {
-      this.group.position.z = this.trainEntryLocalZ + Math.max(0, routeDistance - this.trainEnterDistance) * 0.72;
+      this.logicalLocalZ = this.trainEntryLocalZ
+        + Math.max(0, routeDistance - this.trainEnterDistance) * TRAIN_RELATIVE_SPEED;
       profile.position.y = Math.abs(pulse) * 0.025;
       profile.rotation.z = pulse * 0.012;
     } else if (this.type === 'drone') {
@@ -161,6 +170,7 @@ export class Obstacle {
     } else {
       profile.position.y = Math.max(0, pulse) * 0.025;
     }
+    this.syncVisualTransform();
   }
 
   disable(): void {
@@ -169,7 +179,22 @@ export class Obstacle {
   }
 
   worldZ(): number {
-    return this.group.parent ? this.group.parent.position.z + this.group.position.z : this.group.position.z;
+    return (this.group.parent?.position.z ?? 0) + this.logicalLocalZ;
+  }
+
+  worldX(): number {
+    return this.logicalX;
+  }
+
+  localZ(): number {
+    return this.logicalLocalZ;
+  }
+
+  private syncVisualTransform(): void {
+    const parentZ = this.group.parent?.position.z ?? 0;
+    sampleTrackRenderPose(this.logicalX, parentZ + this.logicalLocalZ, this.renderPose);
+    this.group.position.set(this.renderPose.x, this.renderPose.y, this.renderPose.z - parentZ);
+    this.group.rotation.set(this.renderPose.pitch, 0, 0);
   }
 
   private poseParts(root: THREE.Object3D, prefix: string, pose: (part: THREE.Object3D) => void): void {

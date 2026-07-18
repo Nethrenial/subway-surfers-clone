@@ -4,6 +4,7 @@ import type { Player } from '../entities/Player';
 import type { Obstacle } from '../entities/Obstacle';
 import type { SeededRandom } from '../utils/random';
 import { findClearLane, type ProtectedRouteItem } from './RouteSafety';
+import { sampleTrackRenderPose, type TrackRenderPose } from './TrackCurve';
 
 export type PowerUpType = 'magnet' | 'shield' | 'multiplier' | 'jump-boost';
 
@@ -30,13 +31,17 @@ class PowerUpPickup implements Poolable, ProtectedRouteItem {
 
   private readonly profiles = new Map<PowerUpType, THREE.Object3D>();
   private readonly ownedMaterials: THREE.Material[] = [];
+  private readonly renderPose: TrackRenderPose = { x: 0, y: 0, z: 0, pitch: 0 };
+  private logicalX = 0;
+  private logicalZ = 0;
+  private spin = 0;
 
   get x(): number {
-    return this.group.position.x;
+    return this.logicalX;
   }
 
   get z(): number {
-    return this.group.position.z;
+    return this.logicalZ;
   }
 
   constructor(geometry: THREE.BufferGeometry) {
@@ -62,9 +67,12 @@ class PowerUpPickup implements Poolable, ProtectedRouteItem {
     this.active = true;
     this.type = type;
     this.previousZ = z;
+    this.logicalX = x;
+    this.logicalZ = z;
+    this.spin = 0;
     this.group.visible = true;
-    this.group.position.set(x, 1.05, z);
     for (const [profileType, profile] of this.profiles) profile.visible = profileType === type;
+    this.syncVisualTransform();
   }
 
   reset(): void {
@@ -82,8 +90,22 @@ class PowerUpPickup implements Poolable, ProtectedRouteItem {
     this.group.add(replacement);
   }
 
+  update(delta: number, speed: number): void {
+    this.previousZ = this.logicalZ;
+    this.logicalZ += speed * delta;
+    this.spin += delta * 2.8;
+    this.syncVisualTransform();
+  }
+
   dispose(): void {
     for (const material of this.ownedMaterials) material.dispose();
+  }
+
+  private syncVisualTransform(): void {
+    sampleTrackRenderPose(this.logicalX, this.logicalZ, this.renderPose);
+    this.group.position.set(this.renderPose.x, 1.05 + this.renderPose.y, this.renderPose.z);
+    this.group.rotation.y = this.spin;
+    this.group.rotation.x = this.renderPose.pitch + Math.sin(this.spin * 0.7) * 0.25;
   }
 }
 
@@ -124,20 +146,17 @@ export class PowerUpSystem {
 
     for (const pickup of this.pool.items) {
       if (!pickup.active) continue;
-      pickup.previousZ = pickup.group.position.z;
-      pickup.group.position.z += speed * delta;
-      pickup.group.rotation.y += delta * 2.8;
-      pickup.group.rotation.x = Math.sin(pickup.group.rotation.y * 0.7) * 0.25;
+      pickup.update(delta, speed);
       const crossed =
-        Math.max(pickup.previousZ, pickup.group.position.z) > player.position.z - 0.6 &&
-        Math.min(pickup.previousZ, pickup.group.position.z) < player.position.z + 0.6;
-      if (crossed && Math.abs(pickup.group.position.x - player.position.x) < 0.85) {
+        Math.max(pickup.previousZ, pickup.z) > player.position.z - 0.6 &&
+        Math.min(pickup.previousZ, pickup.z) < player.position.z + 0.6;
+      if (crossed && Math.abs(pickup.x - player.position.x) < 0.85) {
         const type = pickup.type;
         this.activate(type);
         this.pool.release(pickup);
         return type;
       }
-      if (pickup.group.position.z > 11) this.pool.release(pickup);
+      if (pickup.z > 11) this.pool.release(pickup);
     }
     return null;
   }

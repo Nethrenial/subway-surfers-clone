@@ -13,7 +13,7 @@ function template(name: string): THREE.Group {
 }
 
 describe('WorldArtDirector', () => {
-  it('waits until every module in a batch is behind the camera before recycling', () => {
+  it('follows the Earth curve and recycles individual world modules', () => {
     const templates: WorldTemplates = {
       arch: template('arch'),
       pylon: template('pylon'),
@@ -24,14 +24,19 @@ describe('WorldArtDirector', () => {
       buildingB: template('building-b'),
     };
     const director = new WorldArtDirector(templates);
-    const firstBatch = director.group.children[0];
+    const firstModule = director.group.children[0];
+    const curvedModule = director.group.children[2];
 
-    director.update(5.7, 10);
-    expect(firstBatch.position.z).toBeCloseTo(61);
+    director.update(2, 10);
+    expect(firstModule.position.z).toBeCloseTo(24);
+    expect(curvedModule.position.x).toBe(0);
+    expect(curvedModule.position.y).toBeLessThan(0);
+    expect(curvedModule.rotation.x).toBeLessThan(0);
+    expect(curvedModule.rotation.y).toBe(0);
 
-    director.update(0.2, 10);
-    expect(firstBatch.position.z).toBeLessThan(-60);
-    expect(Math.max(...director.group.children.map((batch) => batch.position.z))).toBeGreaterThan(-5);
+    director.update(0.3, 10);
+    expect(firstModule.position.z).toBeLessThan(-100);
+    expect(Math.max(...director.group.children.map((module) => module.position.z))).toBeGreaterThan(0);
 
     director.dispose();
     for (const root of Object.values(templates)) {

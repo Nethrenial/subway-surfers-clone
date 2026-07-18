@@ -12,14 +12,19 @@ import type { ProtectedRouteItem } from './RouteSafety';
 
 export type ObstacleTemplates = Record<'barrier' | 'hurdle' | 'gate' | 'drone' | 'train', THREE.Object3D>;
 import type { SeededRandom } from '../utils/random';
+import { TRAIN_RELATIVE_SPEED, TRAIN_SPEED_MULTIPLIER } from '../game/RunnerTuning';
+import { sampleTrackChordRenderPose, type TrackRenderPose } from './TrackCurve';
 
 const SEGMENT_LENGTH = 12;
 const SEGMENT_COUNT = 10;
+const TRACK_SLICE_LENGTH = 3;
+const TRACK_SLICES_PER_SEGMENT = SEGMENT_LENGTH / TRACK_SLICE_LENGTH;
+const TRACK_SLICE_COUNT = SEGMENT_COUNT * TRACK_SLICES_PER_SEGMENT;
 const RECYCLE_Z = 17;
 const VISIBLE_FAR_Z = -64;
 const VISIBLE_NEAR_Z = 16;
 const TRAIN_ENTRY_Z = VISIBLE_FAR_Z - 2.7;
-const TRAIN_ROUTE_DISTANCE = (VISIBLE_NEAR_Z + 2.7 - TRAIN_ENTRY_Z) / 1.72;
+const TRAIN_ROUTE_DISTANCE = (VISIBLE_NEAR_Z + 2.7 - TRAIN_ENTRY_Z) / TRAIN_SPEED_MULTIPLIER;
 
 class TrackSegment {
   readonly group = new THREE.Group();
@@ -68,6 +73,11 @@ export class TrackManager {
   private readonly deckInstances: THREE.InstancedMesh;
   private readonly markingInstances: THREE.InstancedMesh;
   private readonly instanceMatrix = new THREE.Matrix4();
+  private readonly instancePosition = new THREE.Vector3();
+  private readonly instanceRotation = new THREE.Quaternion();
+  private readonly instanceScale = new THREE.Vector3(1, 1, 1);
+  private readonly renderPose: TrackRenderPose = { x: 0, y: 0, z: 0, pitch: 0 };
+  private readonly trackPitchAxis = new THREE.Vector3(1, 0, 0);
   private generation = 0;
   private safeLane = 1;
   private trainConflictViolations = 0;
@@ -124,21 +134,21 @@ export class TrackManager {
       roughness: 0.28,
     });
     this.materials.push(trackMaterial, laneMaterial);
-    const deckGeometry = new THREE.BoxGeometry(7.8, 0.28, SEGMENT_LENGTH);
+    const deckGeometry = new THREE.BoxGeometry(7.8, 0.28, TRACK_SLICE_LENGTH);
     const markingParts = [
-      translatedBox(0.055, 0.018, SEGMENT_LENGTH - 0.55, -1.175, 0.012, 0),
-      translatedBox(0.055, 0.018, SEGMENT_LENGTH - 0.55, 1.175, 0.012, 0),
-      translatedBox(0.16, 0.11, SEGMENT_LENGTH, -3.82, 0.08, 0),
-      translatedBox(0.16, 0.11, SEGMENT_LENGTH, 3.82, 0.08, 0),
+      translatedBox(0.055, 0.018, TRACK_SLICE_LENGTH - 0.08, -1.175, 0.012, 0),
+      translatedBox(0.055, 0.018, TRACK_SLICE_LENGTH - 0.08, 1.175, 0.012, 0),
+      translatedBox(0.16, 0.11, TRACK_SLICE_LENGTH, -3.82, 0.08, 0),
+      translatedBox(0.16, 0.11, TRACK_SLICE_LENGTH, 3.82, 0.08, 0),
     ];
     const markingGeometry = mergeGeometries(markingParts, false);
     for (const part of markingParts) part.dispose();
     if (!markingGeometry) throw new Error('Could not merge track marking geometry.');
     this.geometries.push(deckGeometry, markingGeometry);
-    this.deckInstances = new THREE.InstancedMesh(deckGeometry, trackMaterial, SEGMENT_COUNT);
+    this.deckInstances = new THREE.InstancedMesh(deckGeometry, trackMaterial, TRACK_SLICE_COUNT);
     this.deckInstances.receiveShadow = true;
     this.deckInstances.frustumCulled = false;
-    this.markingInstances = new THREE.InstancedMesh(markingGeometry, laneMaterial, SEGMENT_COUNT);
+    this.markingInstances = new THREE.InstancedMesh(markingGeometry, laneMaterial, TRACK_SLICE_COUNT);
     this.markingInstances.receiveShadow = true;
     this.markingInstances.frustumCulled = false;
     this.group.add(this.deckInstances, this.markingInstances);
@@ -164,7 +174,7 @@ export class TrackManager {
     protectedItems: readonly ProtectedRouteItem[] = [],
   ): void {
     for (const obstacle of this.obstacles) {
-      obstacle.previousWorldX = obstacle.group.position.x;
+      obstacle.previousWorldX = obstacle.worldX();
       obstacle.previousWorldZ = obstacle.worldZ();
     }
     this.distance += speed * delta;
@@ -193,7 +203,7 @@ export class TrackManager {
         this.scheduleSegmentTrains(segment, collectibles, protectedItems);
         this.generation += 1;
         for (const obstacle of segment.obstacles) {
-          obstacle.previousWorldX = obstacle.group.position.x;
+          obstacle.previousWorldX = obstacle.worldX();
           obstacle.previousWorldZ = obstacle.worldZ();
         }
       }
@@ -215,7 +225,7 @@ export class TrackManager {
         previousDistance >= obstacle.trainEnterDistance &&
         this.distance < obstacle.trainExitDistance
       ) {
-        const expectedDisplacement = speed * delta * 1.72;
+        const expectedDisplacement = speed * delta * TRAIN_SPEED_MULTIPLIER;
         if (Math.abs(worldZ - obstacle.previousWorldZ - expectedDisplacement) > 0.02) {
           this.trainMotionViolations += 1;
         }
@@ -255,7 +265,7 @@ export class TrackManager {
       this.scheduleSegmentTrains(segment, [], []);
       this.generation += 1;
       for (const obstacle of segment.obstacles) {
-        obstacle.previousWorldX = obstacle.group.position.x;
+        obstacle.previousWorldX = obstacle.worldX();
         obstacle.previousWorldZ = obstacle.worldZ();
       }
       for (const obstacle of segment.obstacles) {
@@ -291,7 +301,7 @@ export class TrackManager {
       if (item.type === 'train') {
         obstacle.scheduleTrain(this.distance, this.distance, this.distance + TRAIN_ROUTE_DISTANCE, TRAIN_ENTRY_Z);
       }
-      obstacle.previousWorldX = obstacle.group.position.x;
+      obstacle.previousWorldX = obstacle.worldX();
       obstacle.previousWorldZ = obstacle.worldZ();
     }
   }
@@ -301,7 +311,7 @@ export class TrackManager {
     const obstacle = this.obstacles[0];
     const segmentZ = obstacle.group.parent?.position.z ?? 0;
     obstacle.configure('barrier', 1, -4 - segmentZ);
-    obstacle.previousWorldX = obstacle.group.position.x;
+    obstacle.previousWorldX = obstacle.worldX();
     obstacle.previousWorldZ = obstacle.worldZ();
   }
 
@@ -369,12 +379,21 @@ export class TrackManager {
   }
 
   private syncTrackInstances(): void {
-    for (let index = 0; index < this.segments.length; index += 1) {
-      const z = this.segments[index].group.position.z;
-      this.instanceMatrix.makeTranslation(0, -0.18, z);
-      this.deckInstances.setMatrixAt(index, this.instanceMatrix);
-      this.instanceMatrix.makeTranslation(0, 0, z);
-      this.markingInstances.setMatrixAt(index, this.instanceMatrix);
+    for (let segmentIndex = 0; segmentIndex < this.segments.length; segmentIndex += 1) {
+      const segmentZ = this.segments[segmentIndex].group.position.z;
+      for (let sliceIndex = 0; sliceIndex < TRACK_SLICES_PER_SEGMENT; sliceIndex += 1) {
+        const instanceIndex = segmentIndex * TRACK_SLICES_PER_SEGMENT + sliceIndex;
+        const offsetZ = -SEGMENT_LENGTH * 0.5 + TRACK_SLICE_LENGTH * (sliceIndex + 0.5);
+        const z = segmentZ + offsetZ;
+        sampleTrackChordRenderPose(0, z, TRACK_SLICE_LENGTH * 0.5, this.renderPose);
+        this.instancePosition.set(this.renderPose.x, this.renderPose.y - 0.18, this.renderPose.z);
+        this.instanceRotation.setFromAxisAngle(this.trackPitchAxis, this.renderPose.pitch);
+        this.instanceMatrix.compose(this.instancePosition, this.instanceRotation, this.instanceScale);
+        this.deckInstances.setMatrixAt(instanceIndex, this.instanceMatrix);
+        this.instancePosition.y += 0.18;
+        this.instanceMatrix.compose(this.instancePosition, this.instanceRotation, this.instanceScale);
+        this.markingInstances.setMatrixAt(instanceIndex, this.instanceMatrix);
+      }
     }
     this.deckInstances.instanceMatrix.needsUpdate = true;
     this.markingInstances.instanceMatrix.needsUpdate = true;
@@ -413,14 +432,14 @@ export class TrackManager {
           );
         }
         for (const item of collectibles) {
-          if (!item.active || item.routeProtected === false || Math.abs(item.x - train.group.position.x) >= 0.8) continue;
+          if (!item.active || item.routeProtected === false || Math.abs(item.x - train.worldX()) >= 0.8) continue;
           nextEnterDistance = Math.max(
             nextEnterDistance,
             this.requiredTrainEntryDistance(enterDistance, item.z, item.routeHalfDepth ?? 0.35, 11),
           );
         }
         for (const item of protectedItems) {
-          if (!item.active || item.routeProtected === false || Math.abs(item.x - train.group.position.x) >= 0.8) continue;
+          if (!item.active || item.routeProtected === false || Math.abs(item.x - train.worldX()) >= 0.8) continue;
           nextEnterDistance = Math.max(
             nextEnterDistance,
             this.requiredTrainEntryDistance(enterDistance, item.z, item.routeHalfDepth ?? 0.45, 11),
@@ -433,7 +452,7 @@ export class TrackManager {
       const exitDistance = enterDistance + TRAIN_ROUTE_DISTANCE;
       const recycleDistance = this.distance + RECYCLE_Z - segment.group.position.z;
       if (exitDistance + 1 > recycleDistance) {
-        train.configure('barrier', train.lane, train.group.position.z);
+        train.configure('barrier', train.lane, train.localZ());
       } else {
         train.scheduleTrain(this.distance, enterDistance, exitDistance, TRAIN_ENTRY_Z);
         if (enterDistance <= this.distance + 0.0001) this.trainsEntered += 1;
@@ -450,7 +469,7 @@ export class TrackManager {
     const bodyZAtEntry = bodyWorldZ + enterDistance - this.distance;
     const gapAtEntry = bodyZAtEntry - TRAIN_ENTRY_Z;
     const clearance = 2.7 + bodyHalfDepth + 0.1;
-    const closingDistance = 0.72 * TRAIN_ROUTE_DISTANCE;
+    const closingDistance = TRAIN_RELATIVE_SPEED * TRAIN_ROUTE_DISTANCE;
     if (gapAtEntry <= -clearance || gapAtEntry >= closingDistance + clearance) return enterDistance;
     return Math.max(enterDistance, this.distance + clearZ + bodyHalfDepth - bodyWorldZ);
   }
@@ -491,11 +510,11 @@ export class TrackManager {
         if (Math.abs(train.worldZ() - obstacle.worldZ()) < overlapDistance) conflicts += 1;
       }
       for (const item of collectibles) {
-        if (!item.active || item.routeProtected === false || Math.abs(item.x - train.group.position.x) >= 0.8) continue;
+        if (!item.active || item.routeProtected === false || Math.abs(item.x - train.worldX()) >= 0.8) continue;
         if (Math.abs(train.worldZ() - item.z) < train.halfDepth + item.routeHalfDepth + 0.1) conflicts += 1;
       }
       for (const item of protectedItems) {
-        if (!item.active || item.routeProtected === false || Math.abs(item.x - train.group.position.x) >= 0.8) continue;
+        if (!item.active || item.routeProtected === false || Math.abs(item.x - train.worldX()) >= 0.8) continue;
         if (Math.abs(train.worldZ() - item.z) < train.halfDepth + (item.routeHalfDepth ?? 0.45) + 0.1) {
           conflicts += 1;
         }

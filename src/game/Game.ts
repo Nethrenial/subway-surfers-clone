@@ -18,11 +18,10 @@ import { ScoreSystem } from '../systems/ScoreSystem';
 import { TrackManager } from '../systems/TrackManager';
 import { WorldArtDirector } from '../systems/WorldArtDirector';
 import { createSeededRandom } from '../utils/random';
+import { RUN_SPEED, TRAIN_SPEED_MULTIPLIER } from './RunnerTuning';
+import { EARTH_CURVE_RADIUS } from '../systems/TrackCurve';
 
 type GameState = 'ready' | 'running' | 'paused' | 'game-over';
-
-const BASE_SPEED = 10.8;
-const MAX_SPEED = 18.5;
 
 export class Game {
   private readonly renderer: THREE.WebGLRenderer;
@@ -53,7 +52,7 @@ export class Game {
   private frame = 0;
   private frameTimeMs = 16.67;
   private elapsed = 0;
-  private speed = BASE_SPEED;
+  private speed: number = RUN_SPEED.base;
   private pausedForScreenshot = false;
   private reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private invulnerableForTest = false;
@@ -184,7 +183,10 @@ export class Game {
     this.tutorialTime += delta;
     if (this.tutorialTime > 4 || input.left || input.right || input.jump || input.roll) this.hud.hideTutorial();
 
-    this.speed = this.speedOverrideForTest ?? Math.min(MAX_SPEED, BASE_SPEED + this.elapsed * 0.075);
+    this.speed = this.speedOverrideForTest ?? Math.min(
+      RUN_SPEED.max,
+      RUN_SPEED.base + this.elapsed * RUN_SPEED.acceleration,
+    );
     if (input.left || input.right) this.audio.play('lane');
     if (input.jump) this.audio.play('jump');
     if (input.roll) this.audio.play('roll');
@@ -224,7 +226,7 @@ export class Game {
 
     this.scoreSystem.update(delta, this.speed, this.powerUps.scoreMultiplier);
     this.effects.update(delta, this.speed, this.player, this.powerUps.remaining.shield > 0);
-    this.audio.setRunIntensity((this.speed - BASE_SPEED) / (MAX_SPEED - BASE_SPEED));
+    this.audio.setRunIntensity((this.speed - RUN_SPEED.base) / (RUN_SPEED.max - RUN_SPEED.base));
     this.cameraRig.update(delta, this.player.position.x, this.reducedMotion);
     this.hud.update(
       this.scoreSystem.score,
@@ -324,7 +326,7 @@ export class Game {
     this.hud.setSettingsVisible(false);
     this.audio.setPaused(false);
     this.elapsed = 0;
-    this.speed = BASE_SPEED;
+    this.speed = RUN_SPEED.base;
     this.tutorialTime = 0;
     this.player.reset();
     this.track.reset(this.rng);
@@ -473,6 +475,10 @@ export class Game {
       coins: this.scoreSystem.coins,
       multiplier: this.powerUps.scoreMultiplier,
       powerUps: { ...this.powerUps.remaining },
+      tuning: {
+        trainSpeedMultiplier: TRAIN_SPEED_MULTIPLIER,
+        earthCurveRadius: EARTH_CURVE_RADIUS,
+      },
       player: {
         position: { x: this.player.position.x, y: this.player.position.y, z: this.player.position.z },
         lane: this.player.lane,

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Obstacle, type ObstacleResources } from '../src/entities/Obstacle';
 import { PLAYER_JUMP_APEX, PLAYER_ROLL_HEIGHT, PLAYER_STANDING_HEIGHT } from '../src/entities/Player';
 import { findClearLane } from '../src/systems/RouteSafety';
+import { TRAIN_RELATIVE_SPEED, TRAIN_SPEED_MULTIPLIER } from '../src/game/RunnerTuning';
 
 function resources(): ObstacleResources {
   return {
@@ -25,7 +26,8 @@ describe('obstacle motion', () => {
     obstacle.updateMotion(0.5, 1.5, 12, 18);
 
     expect(entryZ).toBeCloseTo(-66.7);
-    expect(obstacle.worldZ() - entryZ).toBeCloseTo(6 * 0.72);
+    expect(obstacle.worldZ() - entryZ).toBeCloseTo(6 * TRAIN_RELATIVE_SPEED);
+    expect(TRAIN_SPEED_MULTIPLIER).toBe(1.86);
   });
 
   it('gives drones an animated hover and bank', () => {

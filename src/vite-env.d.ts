@@ -11,6 +11,10 @@ interface ThreeGameDiagnostics {
   coins: number;
   multiplier: number;
   powerUps: Record<'magnet' | 'shield' | 'multiplier' | 'jump-boost', number>;
+  tuning: {
+    trainSpeedMultiplier: number;
+    earthCurveRadius: number;
+  };
   player: {
     position: { x: number; y: number; z: number };
     lane: number;

@@ -219,11 +219,23 @@ test('oncoming trains move continuously after entering the visible corridor', as
   await expect.poll(
     async () => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.entities.visibleTrains ?? 0),
   ).toBeGreaterThan(0);
+  expect(await page.evaluate(
+    () => window.__THREE_GAME_DIAGNOSTICS__?.tuning.trainSpeedMultiplier,
+  )).toBe(1.86);
+  expect(await page.evaluate(
+    () => window.__THREE_GAME_DIAGNOSTICS__?.tuning.earthCurveRadius,
+  )).toBe(420);
 
-  const startZ = await page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.entities.leadTrainZ ?? -Infinity);
-  await page.waitForTimeout(300);
+  const start = await page.evaluate(() => ({
+    elapsed: window.__THREE_GAME_DIAGNOSTICS__?.elapsed ?? 0,
+    z: window.__THREE_GAME_DIAGNOSTICS__?.entities.leadTrainZ ?? -Infinity,
+  }));
+  await expect.poll(
+    async () => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.elapsed ?? 0),
+    { timeout: 15_000 },
+  ).toBeGreaterThan(start.elapsed + 0.25);
   const endZ = await page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.entities.leadTrainZ ?? -Infinity);
-  expect(endZ - startZ).toBeGreaterThan(4);
+  expect(endZ - start.z).toBeGreaterThan(4);
 
   expect(await page.evaluate(
     () => window.__THREE_GAME_DIAGNOSTICS__?.entities.trainConflictViolations ?? -1,

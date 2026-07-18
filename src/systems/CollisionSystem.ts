@@ -14,7 +14,7 @@ export class CollisionSystem {
       if (!zOverlap) continue;
       const xOverlap = overlapInterval(
         obstacle.previousWorldX - player.previousX,
-        obstacle.group.position.x - player.position.x,
+        obstacle.worldX() - player.position.x,
         obstacle.halfWidth + player.halfWidth,
       );
       if (!xOverlap) continue;

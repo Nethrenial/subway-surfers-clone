@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ObjectPool, type Poolable } from '../core/ObjectPool';
 import type { Player } from '../entities/Player';
+import { sampleTrackRenderPose, type TrackRenderPose } from './TrackCurve';
 
 class BurstParticle implements Poolable {
   active = false;
@@ -50,6 +51,8 @@ export class EffectsManager {
   private readonly position = new THREE.Vector3();
   private readonly scale = new THREE.Vector3();
   private readonly rotation = new THREE.Quaternion();
+  private readonly renderPose: TrackRenderPose = { x: 0, y: 0, z: 0, pitch: 0 };
+  private readonly trackPitchAxis = new THREE.Vector3(1, 0, 0);
 
   constructor() {
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -93,7 +96,9 @@ export class EffectsManager {
       particle.x += particle.vx * delta;
       particle.y += particle.vy * delta;
       particle.z += particle.vz * delta;
-      this.position.set(particle.x, particle.y, particle.z);
+      sampleTrackRenderPose(particle.x, particle.z, this.renderPose);
+      this.position.set(this.renderPose.x, particle.y + this.renderPose.y, this.renderPose.z);
+      this.rotation.setFromAxisAngle(this.trackPitchAxis, this.renderPose.pitch);
       this.scale.setScalar(Math.max(0.25, particle.life / 0.42));
       this.matrix.compose(this.position, this.rotation, this.scale);
       this.mesh.setMatrixAt(index++, this.matrix);
@@ -104,7 +109,9 @@ export class EffectsManager {
     for (let streakIndex = 0; streakIndex < this.streakZ.length; streakIndex += 1) {
       this.streakZ[streakIndex] += speed * delta * 1.35;
       if (this.streakZ[streakIndex] > 12) this.streakZ[streakIndex] -= 102;
-      this.position.set(this.streakX[streakIndex], this.streakY[streakIndex], this.streakZ[streakIndex]);
+      sampleTrackRenderPose(this.streakX[streakIndex], this.streakZ[streakIndex], this.renderPose);
+      this.position.set(this.renderPose.x, this.streakY[streakIndex] + this.renderPose.y, this.renderPose.z);
+      this.rotation.setFromAxisAngle(this.trackPitchAxis, this.renderPose.pitch);
       this.scale.set(1, 1, 0.75 + speed / 22);
       this.matrix.compose(this.position, this.rotation, this.scale);
       this.streaks.setMatrixAt(streakIndex, this.matrix);
